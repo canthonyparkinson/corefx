@@ -16,15 +16,12 @@ using Microsoft.Win32.SafeHandles;
 
 namespace System.Net.WebSockets
 {
-    internal partial struct WebSocketHandle
+    internal readonly partial struct WebSocketHandle
     {
         #region Properties
-        public bool IsValid
+        public static bool IsValid(WebSocketHandle handle)
         {
-            get
-            {
-                return _webSocket != null;
-            }
+            return handle._webSocket != null;
         }
 
         public WebSocketCloseStatus? CloseStatus
@@ -66,6 +63,37 @@ namespace System.Net.WebSockets
             bool endOfMessage,
             CancellationToken cancellationToken)
         {
+            if (messageType != WebSocketMessageType.Text && messageType != WebSocketMessageType.Binary)
+            {
+                string errorMessage = SR.Format(
+                        SR.net_WebSockets_Argument_InvalidMessageType,
+                        nameof(WebSocketMessageType.Close),
+                        nameof(SendAsync),
+                        nameof(WebSocketMessageType.Binary),
+                        nameof(WebSocketMessageType.Text),
+                        nameof(CloseOutputAsync));
+                throw new ArgumentException(errorMessage, nameof(messageType));
+            }
+
+            WebSocketValidate.ValidateArraySegment(buffer, nameof(buffer));
+
+            return _webSocket.SendAsync(buffer, messageType, endOfMessage, cancellationToken);
+        }
+
+        public ValueTask SendAsync(ReadOnlyMemory<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+        {
+            if (messageType != WebSocketMessageType.Text && messageType != WebSocketMessageType.Binary)
+            {
+                string errorMessage = SR.Format(
+                        SR.net_WebSockets_Argument_InvalidMessageType,
+                        nameof(WebSocketMessageType.Close),
+                        nameof(SendAsync),
+                        nameof(WebSocketMessageType.Binary),
+                        nameof(WebSocketMessageType.Text),
+                        nameof(CloseOutputAsync));
+                throw new ArgumentException(errorMessage, nameof(messageType));
+            }
+
             return _webSocket.SendAsync(buffer, messageType, endOfMessage, cancellationToken);
         }
 
@@ -73,14 +101,19 @@ namespace System.Net.WebSockets
             ArraySegment<byte> buffer,
             CancellationToken cancellationToken)
         {
+            WebSocketValidate.ValidateArraySegment(buffer, nameof(buffer));
             return _webSocket.ReceiveAsync(buffer, cancellationToken);
         }
+
+        public ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken) =>
+            _webSocket.ReceiveAsync(buffer, cancellationToken);
 
         public Task CloseAsync(
             WebSocketCloseStatus closeStatus,
             string statusDescription,
             CancellationToken cancellationToken)
         {
+            WebSocketValidate.ValidateCloseStatus(closeStatus, statusDescription);
             return _webSocket.CloseAsync(closeStatus, statusDescription, cancellationToken);
         }
 
@@ -89,6 +122,7 @@ namespace System.Net.WebSockets
             string statusDescription,
             CancellationToken cancellationToken)
         {
+            WebSocketValidate.ValidateCloseStatus(closeStatus, statusDescription);
             return _webSocket.CloseOutputAsync(closeStatus, statusDescription, cancellationToken);
         }
 

@@ -14,6 +14,9 @@ namespace System.Globalization.Tests
         [Fact]
         public void CurrentCulture()
         {
+            if (PlatformDetection.IsNetNative && !PlatformDetection.IsInAppContainer) // Tide us over until .Net Native ILC tests run are run inside an appcontainer.
+                return;
+
             RemoteInvoke(() =>
             {
                 CultureInfo newCulture = new CultureInfo(CultureInfo.CurrentCulture.Name.Equals("ja-JP", StringComparison.OrdinalIgnoreCase) ? "ar-SA" : "ja-JP");
@@ -34,12 +37,15 @@ namespace System.Globalization.Tests
         [Fact]
         public void CurrentCulture_Set_Null_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>("value", () => CultureInfo.CurrentCulture = null);
+            AssertExtensions.Throws<ArgumentNullException>("value", () => CultureInfo.CurrentCulture = null);
         }
 
         [Fact]
         public void CurrentUICulture()
         {
+            if (PlatformDetection.IsNetNative && !PlatformDetection.IsInAppContainer) // Tide us over until .Net Native ILC tests run are run inside an appcontainer.
+                return;
+
             RemoteInvoke(() =>
             {
                 CultureInfo newUICulture = new CultureInfo(CultureInfo.CurrentUICulture.Name.Equals("ja-JP", StringComparison.OrdinalIgnoreCase) ? "ar-SA" : "ja-JP");
@@ -57,6 +63,7 @@ namespace System.Globalization.Tests
         }
 
         [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.Uap, "Thread cultures is not honored in UWP.")]
         public void DefaultThreadCurrentCulture()
         {
             RemoteInvoke(() =>
@@ -76,6 +83,7 @@ namespace System.Globalization.Tests
         }
 
         [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.Uap, "Thread cultures is not honored in UWP.")]
         public void DefaultThreadCurrentUICulture()
         {
             RemoteInvoke(() =>
@@ -97,10 +105,10 @@ namespace System.Globalization.Tests
         [Fact]
         public void CurrentUICulture_Set_Null_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>("value", () => CultureInfo.CurrentUICulture = null);
+            AssertExtensions.Throws<ArgumentNullException>("value", () => CultureInfo.CurrentUICulture = null);
         }
 
-        [PlatformSpecific(Xunit.PlatformID.AnyUnix)]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // Windows locale support doesn't rely on LANG variable
         [Theory]
         [InlineData("en-US.UTF-8", "en-US")]
         [InlineData("en-US", "en-US")]
@@ -112,7 +120,8 @@ namespace System.Globalization.Tests
             var psi = new ProcessStartInfo();
             psi.Environment.Clear();
 
-            CopyHomeIfPresent(psi.Environment);
+            CopyEssentialTestEnvironment(psi.Environment);
+
             psi.Environment["LANG"] = langEnvVar;
 
             RemoteInvoke(expected =>
@@ -127,7 +136,7 @@ namespace System.Globalization.Tests
             }, expectedCultureName, new RemoteInvokeOptions { StartInfo = psi }).Dispose();
         }
 
-        [PlatformSpecific(Xunit.PlatformID.AnyUnix)]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // When LANG is empty or unset, should default to the invariant culture on Unix.
         [Theory]
         [InlineData("")]
         [InlineData(null)]
@@ -136,7 +145,8 @@ namespace System.Globalization.Tests
             var psi = new ProcessStartInfo();
             psi.Environment.Clear();
 
-            CopyHomeIfPresent(psi.Environment);
+            CopyEssentialTestEnvironment(psi.Environment);
+
             if (langEnvVar != null)
             {
                psi.Environment["LANG"] = langEnvVar;
@@ -154,13 +164,17 @@ namespace System.Globalization.Tests
             }, new RemoteInvokeOptions { StartInfo = psi }).Dispose();
         }
 
-        private static void CopyHomeIfPresent(IDictionary<string, string> environment)
+        private static void CopyEssentialTestEnvironment(IDictionary<string, string> environment)
         {
-            string currentHome = Environment.GetEnvironmentVariable("HOME");
-
-            if (currentHome != null)
+            string[] essentialVariables = { "HOME", "LD_LIBRARY_PATH" };
+            foreach(string essentialVariable in essentialVariables)
             {
-                environment["HOME"] = currentHome;
+                string varValue = Environment.GetEnvironmentVariable(essentialVariable);
+
+                if (varValue != null)
+                {
+                    environment[essentialVariable] = varValue;
+                }
             }
         }
     }

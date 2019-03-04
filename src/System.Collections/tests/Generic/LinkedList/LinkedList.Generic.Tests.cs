@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
@@ -18,6 +18,8 @@ namespace System.Collections.Tests
         {
             return GenericLinkedListFactory();
         }
+
+        protected override Type ICollection_Generic_CopyTo_IndexLargerThanArrayCount_ThrowType => typeof(ArgumentOutOfRangeException);
 
         #endregion
 
@@ -498,7 +500,7 @@ namespace System.Collections.Tests
         [Fact]
         public void LinkedList_Generic_Constructor_IEnumerable_Null_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>("collection", () => new LinkedList<T>(null));
+            AssertExtensions.Throws<ArgumentNullException>("collection", () => new LinkedList<T>(null));
         }
 
         #endregion

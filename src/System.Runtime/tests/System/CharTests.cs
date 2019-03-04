@@ -2,56 +2,55 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using Xunit;
 
 namespace System.Tests
 {
-    public static class CharTests
+    public class CharTests
     {
         [Theory]
         [InlineData('h', 'h', 0)]
         [InlineData('h', 'a', 1)]
         [InlineData('h', 'z', -1)]
         [InlineData('h', null, 1)]
-        public static void CompareTo(char c, object value, int expected)
+        public void CompareTo_Other_ReturnsExpected(char c, object value, int expected)
         {
-            if (value is char)
+            if (value is char charValue)
             {
-                Assert.Equal(expected, Math.Sign(c.CompareTo((char)value)));
+                Assert.Equal(expected, Math.Sign(c.CompareTo(charValue)));
             }
-            IComparable comparable = c;
-            Assert.Equal(expected, Math.Sign(comparable.CompareTo(value)));
-        }
 
-        [Fact]
-        public static void CompareTo_ObjectNotChar_ThrowsArgumentException()
-        {
-            IComparable comparable = 'h';
-            Assert.Throws<ArgumentException>(null, () => comparable.CompareTo("H")); // Value not a char
-        }
-
-        [Fact]
-        public static void ConvertFromUtf32_InvalidChar()
-        {
-            // TODO: add this as [InlineData] when #7166 is fixed
-            ConvertFromUtf32(0xFFFF, "\uFFFF");
+            Assert.Equal(expected, Math.Sign(c.CompareTo(value)));
         }
 
         [Theory]
-        [InlineData(0x10000, "\uD800\uDC00")]
-        [InlineData(0x103FF, "\uD800\uDFFF")]
-        [InlineData(0xFFFFF, "\uDBBF\uDFFF")]
-        [InlineData(0x10FC00, "\uDBFF\uDC00")]
-        [InlineData(0x10FFFF, "\uDBFF\uDFFF")]
-        [InlineData(0, "\0")]
-        [InlineData(0x3FF, "\u03FF")]
-        [InlineData(0xE000, "\uE000")]
+        [InlineData("a")]
+        [InlineData(234)]
+        public void CompareTo_ObjectNotDouble_ThrowsArgumentException(object value)
+        {
+            AssertExtensions.Throws<ArgumentException>(null, () => ((char)123).CompareTo(value));
+        }
+
+        public static IEnumerable<object[]> ConvertFromUtf32_TestData()
+        {
+            yield return new object[] { 0x10000, "\uD800\uDC00" };
+            yield return new object[] { 0x103FF, "\uD800\uDFFF" };
+            yield return new object[] { 0xFFFFF, "\uDBBF\uDFFF" };
+            yield return new object[] { 0x10FC00, "\uDBFF\uDC00" };
+            yield return new object[] { 0x10FFFF, "\uDBFF\uDFFF" };
+            yield return new object[] { 0, "\0" };
+            yield return new object[] { 0x3FF, "\u03FF" };
+            yield return new object[] { 0xE000, "\uE000" };
+            yield return new object[] { 0xFFFF, "\uFFFF" };
+        }
+
+        [Theory]
+        [MemberData(nameof(ConvertFromUtf32_TestData))]
         public static void ConvertFromUtf32(int utf32, string expected)
         {
-            // TODO: add this as [InlineData] when #7166 is fixed
             Assert.Equal(expected, char.ConvertFromUtf32(utf32));
         }
 
@@ -65,31 +64,31 @@ namespace System.Tests
         [InlineData(int.MinValue)]
         public static void ConvertFromUtf32_InvalidUtf32_ThrowsArgumentOutOfRangeException(int utf32)
         {
-            Assert.Throws<ArgumentOutOfRangeException>("utf32", () => char.ConvertFromUtf32(utf32));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("utf32", () => char.ConvertFromUtf32(utf32));
         }
 
-        [Fact]
-        public static void ConvertToUtf32_String_Int()
+        public static IEnumerable<object[]> ConvertToUtf32_String_Int_TestData()
         {
-            // TODO: add this as [InlineData] when #7166 is fixed
-            ConvertToUtf32_String_Int("\uD800\uD800\uDFFF", 1, 0x103FF);
-            ConvertToUtf32_String_Int("\uD800\uD7FF", 1, 0xD7FF);  // High, non-surrogate
-            ConvertToUtf32_String_Int("\uD800\u0000", 1, 0);  // High, non-surrogate
-            ConvertToUtf32_String_Int("\uDF01\u0000", 1, 0);  // Low, non-surrogate
+            yield return new object[] { "\uD800\uDC00", 0, 0x10000 };
+            yield return new object[] { "\uDBBF\uDFFF", 0, 0xFFFFF };
+            yield return new object[] { "\uDBFF\uDC00", 0, 0x10FC00 };
+            yield return new object[] { "\uDBFF\uDFFF", 0, 0x10FFFF };
+            yield return new object[] { "\u0000\u0001", 0, 0 };
+            yield return new object[] { "\u0000\u0001", 1, 1 };
+            yield return new object[] { "\u0000", 0, 0 };
+            yield return new object[] { "\u0020\uD7FF", 0, 32 };
+            yield return new object[] { "\u0020\uD7FF", 1, 0xD7FF };
+            yield return new object[] { "abcde", 4, 'e' };
+
+            // Invalid unicode
+            yield return new object[] { "\uD800\uD800\uDFFF", 1, 0x103FF };
+            yield return new object[] { "\uD800\uD7FF", 1, 0xD7FF }; // High, non-surrogate
+            yield return new object[] { "\uD800\u0000", 1, 0 }; // High, non-surrogate
+            yield return new object[] { "\uDF01\u0000", 1, 0 }; // Low, non-surrogate
         }
 
         [Theory]
-        [InlineData("\uD800\uDC00", 0, 0x10000)]
-        [InlineData("\uDBBF\uDFFF", 0, 0xFFFFF)]
-        [InlineData("\uDBBF\uDFFF", 0, 0xFFFFF)]
-        [InlineData("\uDBFF\uDC00", 0, 0x10FC00)]
-        [InlineData("\uDBFF\uDFFF", 0, 0x10FFFF)]
-        [InlineData("\u0000\u0001", 0, 0)]
-        [InlineData("\u0000\u0001", 1, 1)]
-        [InlineData("\u0000", 0, 0)]
-        [InlineData("\u0020\uD7FF", 0, 32)]
-        [InlineData("\u0020\uD7FF", 1, 0xD7FF)]
-        [InlineData("abcde", 4, 'e')]
+        [MemberData(nameof(ConvertToUtf32_String_Int_TestData))]
         public static void ConvertToUtf32_String_Int(string s, int index, int expected)
         {
             Assert.Equal(expected, char.ConvertToUtf32(s, index));
@@ -98,37 +97,36 @@ namespace System.Tests
         [Fact]
         public static void ConvertToUtf32_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.ConvertToUtf32(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.ConvertToUtf32(null, 0)); // String is null
 
-            Assert.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uD800\uD800", 0)); // High, high
-            Assert.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uD800\uD800", 1)); // High, high
-            Assert.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uD800\uD7FF", 0)); // High, non-surrogate
-            Assert.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uD800\u0000", 0)); // High, non-surrogate
+            AssertExtensions.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uD800\uD800", 0)); // High, high
+            AssertExtensions.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uD800\uD800", 1)); // High, high
+            AssertExtensions.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uD800\uD7FF", 0)); // High, non-surrogate
+            AssertExtensions.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uD800\u0000", 0)); // High, non-surrogate
 
-            Assert.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDC01\uD940", 0)); // Low, high
-            Assert.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDC01\uD940", 1)); // Low, high
-            Assert.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDD00\uDE00", 0)); // Low, low
-            Assert.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDD00\uDE00", 1)); // Low, hig
-            Assert.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDF01\u0000", 0)); // Low, non-surrogateh
+            AssertExtensions.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDC01\uD940", 0)); // Low, high
+            AssertExtensions.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDC01\uD940", 1)); // Low, high
+            AssertExtensions.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDD00\uDE00", 0)); // Low, low
+            AssertExtensions.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDD00\uDE00", 1)); // Low, hig
+            AssertExtensions.Throws<ArgumentException>("s", () => char.ConvertToUtf32("\uDF01\u0000", 0)); // Low, non-surrogateh
 
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.ConvertToUtf32("abcde", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.ConvertToUtf32("abcde", 5)); // Index >= string.Length
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.ConvertToUtf32("", 0)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.ConvertToUtf32("abcde", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.ConvertToUtf32("abcde", 5)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.ConvertToUtf32("", 0)); // Index >= string.Length
         }
 
-        [Fact]
-        public static void ConvertToUtf32_Char_Char()
+        public static IEnumerable<object[]> ConvertToUtf32_Char_Char_TestData()
         {
-            // TODO: add this as [InlineData] when #7166 is fixed
-            TestConvertToUtf32_Char_Char('\uD800', '\uDC00', 0x10000);
-            TestConvertToUtf32_Char_Char('\uD800', '\uDC00', 0x10000);
-            TestConvertToUtf32_Char_Char('\uD800', '\uDFFF', 0x103FF);
-            TestConvertToUtf32_Char_Char('\uDBBF', '\uDFFF', 0xFFFFF);
-            TestConvertToUtf32_Char_Char('\uDBFF', '\uDC00', 0x10FC00);
-            TestConvertToUtf32_Char_Char('\uDBFF', '\uDFFF', 0x10FFFF);
+            yield return new object[] { '\uD800', '\uDC00', 0x10000 };
+            yield return new object[] { '\uD800', '\uDFFF', 0x103FF };
+            yield return new object[] { '\uDBBF', '\uDFFF', 0xFFFFF };
+            yield return new object[] { '\uDBFF', '\uDC00', 0x10FC00 };
+            yield return new object[] { '\uDBFF', '\uDFFF', 0x10FFFF };
         }
 
-        private static void TestConvertToUtf32_Char_Char(char highSurrogate, char lowSurrogate, int expected)
+        [Theory]
+        [MemberData(nameof(ConvertToUtf32_Char_Char_TestData))]
+        public static void ConvertToUtf32_Char_Char(char highSurrogate, char lowSurrogate, int expected)
         {
             Assert.Equal(expected, char.ConvertToUtf32(highSurrogate, lowSurrogate));
         }
@@ -136,16 +134,16 @@ namespace System.Tests
         [Fact]
         public static void ConvertToUtf32_Char_Char_Invalid()
         {
-            Assert.Throws<ArgumentOutOfRangeException>("lowSurrogate", () => char.ConvertToUtf32('\uD800', '\uD800')); // High, high
-            Assert.Throws<ArgumentOutOfRangeException>("lowSurrogate", () => char.ConvertToUtf32('\uD800', '\uD7FF')); // High, non-surrogate
-            Assert.Throws<ArgumentOutOfRangeException>("lowSurrogate", () => char.ConvertToUtf32('\uD800', '\u0000')); // High, non-surrogate
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("lowSurrogate", () => char.ConvertToUtf32('\uD800', '\uD800')); // High, high
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("lowSurrogate", () => char.ConvertToUtf32('\uD800', '\uD7FF')); // High, non-surrogate
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("lowSurrogate", () => char.ConvertToUtf32('\uD800', '\u0000')); // High, non-surrogate
 
-            Assert.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\uDD00', '\uDE00')); // Low, low
-            Assert.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\uDC01', '\uD940')); // Low, high
-            Assert.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\uDF01', '\u0000')); // Low, non-surrogate
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\uDD00', '\uDE00')); // Low, low
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\uDC01', '\uD940')); // Low, high
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\uDF01', '\u0000')); // Low, non-surrogate
 
-            Assert.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\u0032', '\uD7FF')); // Non-surrogate, non-surrogate
-            Assert.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\u0000', '\u0000')); // Non-surrogate, non-surrogate
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\u0032', '\uD7FF')); // Non-surrogate, non-surrogate
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("highSurrogate", () => char.ConvertToUtf32('\u0000', '\u0000')); // Non-surrogate, non-surrogate
         }
 
         [Theory]
@@ -189,9 +187,15 @@ namespace System.Tests
         [Fact]
         public static void GetNumericValue_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.GetNumericValue(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.GetNumericValue("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.GetNumericValue("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.GetNumericValue(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.GetNumericValue("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.GetNumericValue("abc", 3)); // Index >= string.Length
+        }
+
+        [Fact]
+        public void GetTypeCode_Invoke_ReturnsBoolean()
+        {
+            Assert.Equal(TypeCode.Char, 'a'.GetTypeCode());
         }
 
         [Fact]
@@ -217,9 +221,9 @@ namespace System.Tests
         [Fact]
         public static void IsControl_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsControl(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsControl("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsControl("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsControl(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsControl("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsControl("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -245,9 +249,9 @@ namespace System.Tests
         [Fact]
         public static void IsDigit_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsDigit(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsDigit("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsDigit("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsDigit(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsDigit("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsDigit("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -289,9 +293,9 @@ namespace System.Tests
         [Fact]
         public static void IsLetter_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsLetter(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsLetter("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsLetter("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsLetter(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsLetter("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsLetter("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -335,9 +339,9 @@ namespace System.Tests
         [Fact]
         public static void IsLetterOrDigit_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsLetterOrDigit(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsLetterOrDigit("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsLetterOrDigit("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsLetterOrDigit(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsLetterOrDigit("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsLetterOrDigit("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -363,9 +367,9 @@ namespace System.Tests
         [Fact]
         public static void IsLower_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsLower(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsLower("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsLower("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsLower(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsLower("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsLower("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -403,9 +407,9 @@ namespace System.Tests
         [Fact]
         public static void IsNumber_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsNumber(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsNumber("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsNumber("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsNumber(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsNumber("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsNumber("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -451,9 +455,9 @@ namespace System.Tests
         [Fact]
         public static void IsPunctuation_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsPunctuation(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsPunctuation("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsPunctuation("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsPunctuation(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsPunctuation("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsPunctuation("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -491,9 +495,9 @@ namespace System.Tests
         [Fact]
         public static void IsSeparator_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsSeparator(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsSeparator("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsSeparator("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsSeparator(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsSeparator("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsSeparator("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -525,9 +529,9 @@ namespace System.Tests
         [Fact]
         public static void IsLowSurrogate_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsLowSurrogate(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsLowSurrogate("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsLowSurrogate("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsLowSurrogate(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsLowSurrogate("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsLowSurrogate("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -559,9 +563,9 @@ namespace System.Tests
         [Fact]
         public static void IsHighSurrogate_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsHighSurrogate(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsHighSurrogate("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsHighSurrogate("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsHighSurrogate(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsHighSurrogate("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsHighSurrogate("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -593,9 +597,9 @@ namespace System.Tests
         [Fact]
         public static void IsSurrogate_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsSurrogate(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsSurrogate("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsSurrogate("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsSurrogate(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsSurrogate("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsSurrogate("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -635,9 +639,9 @@ namespace System.Tests
         [Fact]
         public static void IsSurrogatePair_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsSurrogatePair(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsSurrogatePair("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsSurrogatePair("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsSurrogatePair(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsSurrogatePair("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsSurrogatePair("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -677,9 +681,9 @@ namespace System.Tests
         [Fact]
         public static void IsSymbol_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsSymbol(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsSymbol("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsSymbol("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsSymbol(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsSymbol("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsSymbol("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -705,9 +709,9 @@ namespace System.Tests
         [Fact]
         public static void IsUpper_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsUpper(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsUpper("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsUpper("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsUpper(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsUpper("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsUpper("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -758,9 +762,9 @@ namespace System.Tests
         [Fact]
         public static void IsWhiteSpace_String_Int_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("s", () => char.IsWhiteSpace(null, 0)); // String is null
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsWhiteSpace("abc", -1)); // Index < 0
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => char.IsWhiteSpace("abc", 3)); // Index >= string.Length
+            AssertExtensions.Throws<ArgumentNullException>("s", () => char.IsWhiteSpace(null, 0)); // String is null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsWhiteSpace("abc", -1)); // Index < 0
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => char.IsWhiteSpace("abc", 3)); // Index >= string.Length
         }
 
         [Fact]
@@ -868,16 +872,24 @@ namespace System.Tests
             }
         }
 
+        public static IEnumerable<object[]> Parse_TestData()
+        {
+            yield return new object[] { "a", 'a' };
+            yield return new object[] { "4", '4' };
+            yield return new object[] { " ", ' ' };
+            yield return new object[] { "\n", '\n' };
+            yield return new object[] { "\0", '\0' };
+            yield return new object[] { "\u0135", '\u0135' };
+            yield return new object[] { "\u05d9", '\u05d9' };
+            yield return new object[] { "\ue001", '\ue001' }; // Private use codepoint
+
+            // Lone surrogate
+            yield return new object[] { "\ud801", '\ud801' }; // High surrogate
+            yield return new object[] { "\udc01", '\udc01' }; // Low surrogate
+        }
 
         [Theory]
-        [InlineData("a", 'a')]
-        [InlineData("4", '4')]
-        [InlineData(" ", ' ')]
-        [InlineData("\n", '\n')]
-        [InlineData("\0", '\0')]
-        [InlineData("\u0135", '\u0135')]
-        [InlineData("\u05d9", '\u05d9')]
-        [InlineData("\ue001", '\ue001')] // Private use codepoint
+        [MemberData(nameof(Parse_TestData))]
         public static void Parse(string s, char expected)
         {
             char c;
@@ -885,14 +897,6 @@ namespace System.Tests
             Assert.Equal(expected, c);
 
             Assert.Equal(expected, char.Parse(s));
-        }
-
-        [Fact]
-        public static void Parse_Surrogate()
-        {
-            // TODO: add this as [InlineData] when #7166 is fixed
-            Parse("\ud801", '\ud801'); // High surrogate
-            Parse("\udc01", '\udc01'); // Low surrogate
         }
 
         [Theory]
@@ -1018,5 +1022,89 @@ namespace System.Tests
         private static char[] s_highSurrogates = new char[] { '\ud800', '\udaaa', '\udbff' }; // Range from '\ud800' to '\udbff'
         private static char[] s_lowSurrogates = new char[] { '\udc00', '\udeee', '\udfff' }; // Range from '\udc00' to '\udfff'
         private static char[] s_nonSurrogates = new char[] { '\u0000', '\ud7ff', '\ue000', '\uffff' };
+
+        private static readonly UnicodeCategory[] s_categoryForLatin1 = 
+        {
+            UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control,    // 0000 - 0007
+            UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control,    // 0008 - 000F
+            UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control,    // 0010 - 0017
+            UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control,    // 0018 - 001F
+            UnicodeCategory.SpaceSeparator, UnicodeCategory.OtherPunctuation, UnicodeCategory.OtherPunctuation, UnicodeCategory.OtherPunctuation, UnicodeCategory.CurrencySymbol, UnicodeCategory.OtherPunctuation, UnicodeCategory.OtherPunctuation, UnicodeCategory.OtherPunctuation,    // 0020 - 0027
+            UnicodeCategory.OpenPunctuation, UnicodeCategory.ClosePunctuation, UnicodeCategory.OtherPunctuation, UnicodeCategory.MathSymbol, UnicodeCategory.OtherPunctuation, UnicodeCategory.DashPunctuation, UnicodeCategory.OtherPunctuation, UnicodeCategory.OtherPunctuation,    // 0028 - 002F
+            UnicodeCategory.DecimalDigitNumber, UnicodeCategory.DecimalDigitNumber, UnicodeCategory.DecimalDigitNumber, UnicodeCategory.DecimalDigitNumber, UnicodeCategory.DecimalDigitNumber, UnicodeCategory.DecimalDigitNumber, UnicodeCategory.DecimalDigitNumber, UnicodeCategory.DecimalDigitNumber,    // 0030 - 0037
+            UnicodeCategory.DecimalDigitNumber, UnicodeCategory.DecimalDigitNumber, UnicodeCategory.OtherPunctuation, UnicodeCategory.OtherPunctuation, UnicodeCategory.MathSymbol, UnicodeCategory.MathSymbol, UnicodeCategory.MathSymbol, UnicodeCategory.OtherPunctuation,    // 0038 - 003F
+            UnicodeCategory.OtherPunctuation, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter,    // 0040 - 0047
+            UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter,    // 0048 - 004F
+            UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter,    // 0050 - 0057
+            UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.OpenPunctuation, UnicodeCategory.OtherPunctuation, UnicodeCategory.ClosePunctuation, UnicodeCategory.ModifierSymbol, UnicodeCategory.ConnectorPunctuation,    // 0058 - 005F
+            UnicodeCategory.ModifierSymbol, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter,    // 0060 - 0067
+            UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter,    // 0068 - 006F
+            UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter,    // 0070 - 0077
+            UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.OpenPunctuation, UnicodeCategory.MathSymbol, UnicodeCategory.ClosePunctuation, UnicodeCategory.MathSymbol, UnicodeCategory.Control,    // 0078 - 007F
+            UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control,    // 0080 - 0087
+            UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control,    // 0088 - 008F
+            UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control,    // 0090 - 0097
+            UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control, UnicodeCategory.Control,    // 0098 - 009F
+            UnicodeCategory.SpaceSeparator, UnicodeCategory.OtherPunctuation, UnicodeCategory.CurrencySymbol, UnicodeCategory.CurrencySymbol, UnicodeCategory.CurrencySymbol, UnicodeCategory.CurrencySymbol, UnicodeCategory.OtherSymbol, UnicodeCategory.OtherSymbol,    // 00A0 - 00A7
+            UnicodeCategory.ModifierSymbol, UnicodeCategory.OtherSymbol, UnicodeCategory.LowercaseLetter, UnicodeCategory.InitialQuotePunctuation, UnicodeCategory.MathSymbol, UnicodeCategory.DashPunctuation, UnicodeCategory.OtherSymbol, UnicodeCategory.ModifierSymbol,    // 00A8 - 00AF
+            UnicodeCategory.OtherSymbol, UnicodeCategory.MathSymbol, UnicodeCategory.OtherNumber, UnicodeCategory.OtherNumber, UnicodeCategory.ModifierSymbol, UnicodeCategory.LowercaseLetter, UnicodeCategory.OtherSymbol, UnicodeCategory.OtherPunctuation,    // 00B0 - 00B7
+            UnicodeCategory.ModifierSymbol, UnicodeCategory.OtherNumber, UnicodeCategory.LowercaseLetter, UnicodeCategory.FinalQuotePunctuation, UnicodeCategory.OtherNumber, UnicodeCategory.OtherNumber, UnicodeCategory.OtherNumber, UnicodeCategory.OtherPunctuation,    // 00B8 - 00BF
+            UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter,    // 00C0 - 00C7
+            UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter,    // 00C8 - 00CF
+            UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.MathSymbol,    // 00D0 - 00D7
+            UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.UppercaseLetter, UnicodeCategory.LowercaseLetter,    // 00D8 - 00DF
+            UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter,    // 00E0 - 00E7
+            UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter,    // 00E8 - 00EF
+            UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.MathSymbol,    // 00F0 - 00F7
+            UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter, UnicodeCategory.LowercaseLetter,    // 00F8 - 00FF
+        };
+
+        public static IEnumerable<object[]> UpperLowerCasing_TestData()
+        {
+            //                          lower          upper    Culture
+            yield return new object[] { 'a',          'A',      "en-US" };
+            yield return new object[] { 'i',          'I',      "en-US" };
+            yield return new object[] { '\u0131',     'I',      "tr-TR" };
+            yield return new object[] { 'i',          '\u0130', "tr-TR" };
+            yield return new object[] { '\u0660',     '\u0660', "en-US" };
+        }
+
+        [Fact]
+        public static void LatinRangeTest()
+        {
+            StringBuilder sb = new StringBuilder(256);
+            string latineString = sb.ToString();
+
+            for (int i=0; i < latineString.Length; i++)
+            {
+                Assert.Equal(s_categoryForLatin1[i], char.GetUnicodeCategory(latineString[i]));
+                Assert.Equal(s_categoryForLatin1[i], char.GetUnicodeCategory(latineString, i));
+            }
+        }
+
+        [Fact]
+        public static void NonLatinRangeTest()
+        {
+            for (int i=256; i <= 0xFFFF; i++)
+            {
+                Assert.Equal(CharUnicodeInfo.GetUnicodeCategory((char)i), char.GetUnicodeCategory((char)i));
+            }
+
+            string nonLatinString = "\u0100\u0200\u0300\u0400\u0500\u0600\u0700\u0800\u0900\u0A00\u0B00\u0C00\u0D00\u0E00\u0F00" + 
+                                    "\u1000\u2000\u3000\u4000\u5000\u6000\u7000\u8000\u9000\uA000\uB000\uC000\uD000\uE000\uF000";
+            for (int i=0; i < nonLatinString.Length; i++)
+            {
+                Assert.Equal(CharUnicodeInfo.GetUnicodeCategory(nonLatinString[i]), char.GetUnicodeCategory(nonLatinString, i));
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(UpperLowerCasing_TestData))]
+        public static void CasingTest(char lowerForm, char upperForm, string cultureName)
+        {
+            CultureInfo ci = CultureInfo.GetCultureInfo(cultureName);
+            Assert.Equal(lowerForm, char.ToLower(upperForm, ci));
+            Assert.Equal(upperForm, char.ToUpper(lowerForm, ci));
+        }
     }
 }

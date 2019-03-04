@@ -10,10 +10,11 @@ namespace System.Collections.Tests
 {
     public class SortedList_Generic_Tests_Values : IList_Generic_Tests<string>
     {
-        protected override bool DefaultValueAllowed { get { return true; } }
-        protected override bool DuplicateValuesAllowed { get { return true; } }
-        protected override bool IsReadOnly { get { return true; } }
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables { get { return new List<ModifyEnumerable>(); } }
+        protected override bool DefaultValueAllowed => true;
+        protected override bool DuplicateValuesAllowed => true;
+        protected override bool IsReadOnly => true;
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations) => new List<ModifyEnumerable>();
+
 
         protected override IList<string> GenericIListFactory()
         {
@@ -58,6 +59,7 @@ namespace System.Collections.Tests
         protected override bool DuplicateValuesAllowed => true;
         protected override bool IsReadOnly => true;
         protected override bool Enumerator_Current_UndefinedOperation_Throws => true;
+        protected override bool SupportsSerialization => false;
 
         protected override Type ICollection_NonGeneric_CopyTo_ArrayOfEnumType_ThrowType => typeof(ArgumentException);
         protected override Type ICollection_NonGeneric_CopyTo_NonZeroLowerBound_ThrowType => typeof(ArgumentOutOfRangeException);
@@ -90,6 +92,6 @@ namespace System.Collections.Tests
             Debug.Assert(false);
         }
 
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables { get { return new List<ModifyEnumerable>(); } }
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations) => new List<ModifyEnumerable>();
     }
 }

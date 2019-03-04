@@ -25,7 +25,7 @@ namespace System.Net.Http
         private Version _version;
         private HttpContent _content;
         private bool _disposed;
-        private IDictionary<String, Object> _properties;
+        private IDictionary<string, object> _properties;
 
         public Version Version
         {
@@ -49,15 +49,15 @@ namespace System.Net.Http
             {
                 CheckDisposed();
 
-                if (HttpEventSource.Log.IsEnabled())
+                if (NetEventSource.IsEnabled)
                 {
                     if (value == null)
                     {
-                        HttpEventSource.ContentNull(this);
+                        NetEventSource.ContentNull(this);
                     }
                     else
                     {
-                        HttpEventSource.Associate(this, value);
+                        NetEventSource.Associate(this, value);
                     }
                 }
 
@@ -110,13 +110,15 @@ namespace System.Net.Http
             }
         }
 
-        public IDictionary<String, Object> Properties
+        internal bool HasHeaders => _headers != null;
+
+        public IDictionary<string, object> Properties
         {
             get
             {
                 if (_properties == null)
                 {
-                    _properties = new Dictionary<String, Object>();
+                    _properties = new Dictionary<string, object>();
                 }
                 return _properties;
             }
@@ -129,16 +131,16 @@ namespace System.Net.Http
 
         public HttpRequestMessage(HttpMethod method, Uri requestUri)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Enter(NetEventSource.ComponentType.Http, this, ".ctor", "Method: " + method + ", Uri: '" + requestUri + "'");
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, method, requestUri);
             InitializeValues(method, requestUri);
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Exit(NetEventSource.ComponentType.Http, this, ".ctor", null);
+            if (NetEventSource.IsEnabled) NetEventSource.Exit(this);
         }
 
         [SuppressMessage("Microsoft.Design", "CA1057:StringUriOverloadsCallSystemUriOverloads",
             Justification = "It is OK to provide 'null' values. A Uri instance is created from 'requestUri' if it is != null.")]
         public HttpRequestMessage(HttpMethod method, string requestUri)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Enter(NetEventSource.ComponentType.Http, this, ".ctor", "Method: " + method + ", Uri: '" + requestUri + "'");
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, method, requestUri);
 
             // It's OK to have a 'null' request Uri. If HttpClient is used, the 'BaseAddress' will be added.
             // If there is no 'BaseAddress', sending this request message will throw.
@@ -152,7 +154,7 @@ namespace System.Net.Http
                 InitializeValues(method, new Uri(requestUri, UriKind.RelativeOrAbsolute));
             }
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Exit(NetEventSource.ComponentType.Http, this, ".ctor", null);
+            if (NetEventSource.IsEnabled) NetEventSource.Exit(this);
         }
 
         public override string ToString()
@@ -172,7 +174,7 @@ namespace System.Net.Http
             sb.Append(_content == null ? "<null>" : _content.GetType().ToString());
 
             sb.Append(", Headers:\r\n");
-            sb.Append(HeaderUtilities.DumpHeaders(_headers, _content == null ? null : _content.Headers));
+            HeaderUtilities.DumpHeaders(sb, _headers, _content?.Headers);
 
             return sb.ToString();
         }

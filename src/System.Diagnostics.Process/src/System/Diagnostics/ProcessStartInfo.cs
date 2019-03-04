@@ -4,7 +4,9 @@
 
 using System.Collections;
 using System.Collections.Generic;
-using System.Security;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Text;
 
 namespace System.Diagnostics
@@ -19,14 +21,12 @@ namespace System.Diagnostics
         private string _fileName;
         private string _arguments;
         private string _directory;
-        private bool _redirectStandardInput = false;
-        private bool _redirectStandardOutput = false;
-        private bool _redirectStandardError = false;
-        private Encoding _standardOutputEncoding;
-        private Encoding _standardErrorEncoding;
+        private string _userName;
+        private string _verb;
+        private Collection<string> _argumentList;
+        private ProcessWindowStyle _windowStyle;
 
-        private bool _createNoWindow = false;
-        internal Dictionary<string, string> _environmentVariables;
+        internal DictionaryWrapper _environmentVariables;
 
         /// <devdoc>
         ///     Default constructor.  At least the <see cref='System.Diagnostics.ProcessStartInfo.FileName'/>
@@ -59,25 +59,25 @@ namespace System.Diagnostics
         /// </devdoc>
         public string Arguments
         {
+            get => _arguments ?? string.Empty;
+            set => _arguments = value;
+        }
+
+        public Collection<string> ArgumentList
+        {
             get
             {
-                if (_arguments == null) return string.Empty;
-                return _arguments;
-            }
-            set
-            {
-                _arguments = value;
+                if (_argumentList == null)
+                {
+                    _argumentList = new Collection<string>();
+                }
+                return _argumentList;
             }
         }
 
-        /// <devdoc>
-        ///    <para>[To be supplied.]</para>
-        /// </devdoc>
-        public bool CreateNoWindow
-        {
-            get { return _createNoWindow; }
-            set { _createNoWindow = value; }
-        }
+        public bool CreateNoWindow { get; set; }
+
+        public StringDictionary EnvironmentVariables => new StringDictionaryWrapper(Environment as DictionaryWrapper);
 
         public IDictionary<string, string> Environment
         {
@@ -88,69 +88,33 @@ namespace System.Diagnostics
                     IDictionary envVars = System.Environment.GetEnvironmentVariables();
 
 #pragma warning disable 0429 // CaseSensitiveEnvironmentVaribles is constant but varies depending on if we build for Unix or Windows
-                    _environmentVariables = new Dictionary<string, string>(
+                    _environmentVariables = new DictionaryWrapper(new Dictionary<string, string>(
                         envVars.Count,
-                        CaseSensitiveEnvironmentVariables ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
+                        CaseSensitiveEnvironmentVariables ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase));
 #pragma warning restore 0429
 
                     // Manual use of IDictionaryEnumerator instead of foreach to avoid DictionaryEntry box allocations.
                     IDictionaryEnumerator e = envVars.GetEnumerator();
-                    try
+                    Debug.Assert(!(e is IDisposable), "Environment.GetEnvironmentVariables should not be IDisposable.");
+                    while (e.MoveNext())
                     {
-                        while (e.MoveNext())
-                        {
-                            DictionaryEntry entry = e.Entry;
-                            _environmentVariables.Add((string)entry.Key, (string)entry.Value);
-                        }
-                    }
-                    finally
-                    {
-                        (e as IDisposable)?.Dispose();
+                        DictionaryEntry entry = e.Entry;
+                        _environmentVariables.Add((string)entry.Key, (string)entry.Value);
                     }
                 }
                 return _environmentVariables;
             }
         }
 
-        /// <devdoc>
-        ///    <para>[To be supplied.]</para>
-        /// </devdoc>
-        public bool RedirectStandardInput
-        {
-            get { return _redirectStandardInput; }
-            set { _redirectStandardInput = value; }
-        }
+        public bool RedirectStandardInput { get; set; }
+        public bool RedirectStandardOutput { get; set; }
+        public bool RedirectStandardError { get; set; }
 
-        /// <devdoc>
-        ///    <para>[To be supplied.]</para>
-        /// </devdoc>
-        public bool RedirectStandardOutput
-        {
-            get { return _redirectStandardOutput; }
-            set { _redirectStandardOutput = value; }
-        }
+        public Encoding StandardInputEncoding { get; set; }
 
-        /// <devdoc>
-        ///    <para>[To be supplied.]</para>
-        /// </devdoc>
-        public bool RedirectStandardError
-        {
-            get { return _redirectStandardError; }
-            set { _redirectStandardError = value; }
-        }
-
-
-        public Encoding StandardErrorEncoding
-        {
-            get { return _standardErrorEncoding; }
-            set { _standardErrorEncoding = value; }
-        }
-
-        public Encoding StandardOutputEncoding
-        {
-            get { return _standardOutputEncoding; }
-            set { _standardOutputEncoding = value; }
-        }
+        public Encoding StandardErrorEncoding { get; set; }
+        
+        public Encoding StandardOutputEncoding { get; set; }
 
         /// <devdoc>
         ///    <para>
@@ -159,8 +123,8 @@ namespace System.Diagnostics
         /// </devdoc>
         public string FileName
         {
-            get { return _fileName ?? string.Empty; }
-            set { _fileName = value; }
+            get => _fileName ?? string.Empty;
+            set => _fileName = value;
         }
 
         /// <devdoc>
@@ -169,8 +133,39 @@ namespace System.Diagnostics
         /// </devdoc>
         public string WorkingDirectory
         {
-            get { return _directory ?? string.Empty; }
-            set { _directory = value; }
+            get => _directory ?? string.Empty;
+            set => _directory = value;
+        }
+
+        public bool ErrorDialog { get; set; }
+        public IntPtr ErrorDialogParentHandle { get; set; }
+
+        public string UserName
+        {
+            get => _userName ?? string.Empty;
+            set => _userName = value;
+        }
+
+        [DefaultValue("")]
+        public string Verb 
+        {
+            get => _verb ?? string.Empty;
+            set => _verb = value;
+        }
+
+        [DefaultValueAttribute(System.Diagnostics.ProcessWindowStyle.Normal)]
+        public ProcessWindowStyle WindowStyle
+        {
+            get => _windowStyle; 
+            set 
+            {
+                if (!Enum.IsDefined(typeof(ProcessWindowStyle), value))
+                {
+                    throw new InvalidEnumArgumentException(nameof(value), (int)value, typeof(ProcessWindowStyle));
+                } 
+                    
+                _windowStyle = value;
+            }
         }
     }
 }

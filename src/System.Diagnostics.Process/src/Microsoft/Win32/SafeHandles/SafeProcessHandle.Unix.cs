@@ -17,7 +17,7 @@ using System.Security;
 
 namespace Microsoft.Win32.SafeHandles
 {
-    public sealed partial class SafeProcessHandle : SafeHandle
+    public sealed partial class SafeProcessHandle : SafeHandleZeroOrMinusOneIsInvalid
     {
         private const int DefaultInvalidHandleValue = -1;
 
@@ -28,11 +28,9 @@ namespace Microsoft.Win32.SafeHandles
 
         public override bool IsInvalid
         {
-            [SecurityCritical]
             get { return ((int)handle) < 0; } // Unix processes have non-negative ID values
         }
 
-        [SecurityCritical]
         protected override bool ReleaseHandle()
         {
             // Nop.  We don't actually hold handles to a process, as there's no equivalent

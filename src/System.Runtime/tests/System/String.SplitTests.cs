@@ -2,45 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using Xunit;
 
 namespace System.Tests
 {
-    // TODO: Remove these extension methods when the actual methods are available on String in System.Runtime.dll
-    internal static class TemporaryStringSplitExtensions
-    {
-        public static string[] Split(this string value, char separator)
-        {
-            return value.Split(new[] { separator });
-        }
-
-        public static string[] Split(this string value, char separator, StringSplitOptions options)
-        {
-            return value.Split(new[] { separator }, options);
-        }
-
-        public static string[] Split(this string value, char separator, int count, StringSplitOptions options)
-        {
-            return value.Split(new[] { separator }, count, options);
-        }
-
-        public static string[] Split(this string value, string separator)
-        {
-            return value.Split(new[] { separator }, StringSplitOptions.None);
-        }
-
-        public static string[] Split(this string value, string separator, StringSplitOptions options)
-        {
-            return value.Split(new[] { separator }, options);
-        }
-
-        public static string[] Split(this string value, string separator, int count, StringSplitOptions options)
-        {
-            return value.Split(new[] { separator }, count, options);
-        }
-    }
-
     public static class StringSplitTests
     {
         [Fact]
@@ -50,11 +15,13 @@ namespace System.Tests
             const int count = -1;
             const StringSplitOptions options = StringSplitOptions.None;
 
-            Assert.Throws<ArgumentOutOfRangeException>(() => value.Split(',', count, options));
-            Assert.Throws<ArgumentOutOfRangeException>(() => value.Split(new[] { ',' }, count));
-            Assert.Throws<ArgumentOutOfRangeException>(() => value.Split(new[] { ',' }, count, options));
-            Assert.Throws<ArgumentOutOfRangeException>(() => value.Split(",", count, options));
-            Assert.Throws<ArgumentOutOfRangeException>(() => value.Split(new[] { "," }, count, options));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("count", () => value.Split(',', count));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("count", () => value.Split(',', count, options));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("count", () => value.Split(new[] { ',' }, count));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("count", () => value.Split(new[] { ',' }, count, options));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("count", () => value.Split(",", count));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("count", () => value.Split(",", count, options));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("count", () => value.Split(new[] { "," }, count, options));
         }
 
         [Fact]
@@ -65,22 +32,22 @@ namespace System.Tests
             const StringSplitOptions optionsTooLow = StringSplitOptions.None - 1;
             const StringSplitOptions optionsTooHigh = StringSplitOptions.RemoveEmptyEntries + 1;
 
-            Assert.Throws<ArgumentException>(() => value.Split(',', optionsTooLow));
-            Assert.Throws<ArgumentException>(() => value.Split(',', optionsTooHigh));
-            Assert.Throws<ArgumentException>(() => value.Split(',', count, optionsTooLow));
-            Assert.Throws<ArgumentException>(() => value.Split(',', count, optionsTooHigh));
-            Assert.Throws<ArgumentException>(() => value.Split(new[] { ',' }, optionsTooLow));
-            Assert.Throws<ArgumentException>(() => value.Split(new[] { ',' }, optionsTooHigh));
-            Assert.Throws<ArgumentException>(() => value.Split(new[] { ',' }, count, optionsTooLow));
-            Assert.Throws<ArgumentException>(() => value.Split(new[] { ',' }, count, optionsTooHigh));
-            Assert.Throws<ArgumentException>(() => value.Split(",", optionsTooLow));
-            Assert.Throws<ArgumentException>(() => value.Split(",", optionsTooHigh));
-            Assert.Throws<ArgumentException>(() => value.Split(",", count, optionsTooLow));
-            Assert.Throws<ArgumentException>(() => value.Split(",", count, optionsTooHigh));
-            Assert.Throws<ArgumentException>(() => value.Split(new[] { "," }, optionsTooLow));
-            Assert.Throws<ArgumentException>(() => value.Split(new[] { "," }, optionsTooHigh));
-            Assert.Throws<ArgumentException>(() => value.Split(new[] { "," }, count, optionsTooLow));
-            Assert.Throws<ArgumentException>(() => value.Split(new[] { "," }, count, optionsTooHigh));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(',', optionsTooLow));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(',', optionsTooHigh));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(',', count, optionsTooLow));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(',', count, optionsTooHigh));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(new[] { ',' }, optionsTooLow));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(new[] { ',' }, optionsTooHigh));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(new[] { ',' }, count, optionsTooLow));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(new[] { ',' }, count, optionsTooHigh));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(",", optionsTooLow));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(",", optionsTooHigh));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(",", count, optionsTooLow));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(",", count, optionsTooHigh));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(new[] { "," }, optionsTooLow));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(new[] { "," }, optionsTooHigh));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(new[] { "," }, count, optionsTooLow));
+            AssertExtensions.Throws<ArgumentException>(null, () => value.Split(new[] { "," }, count, optionsTooHigh));
         }
 
         [Fact]
@@ -92,9 +59,11 @@ namespace System.Tests
 
             string[] expected = new string[0];
 
+            Assert.Equal(expected, value.Split(',', count));
             Assert.Equal(expected, value.Split(',', count, options));
             Assert.Equal(expected, value.Split(new[] { ',' }, count));
             Assert.Equal(expected, value.Split(new[] { ',' }, count, options));
+            Assert.Equal(expected, value.Split(",", count));
             Assert.Equal(expected, value.Split(",", count, options));
             Assert.Equal(expected, value.Split(new[] { "," }, count, options));
         }
@@ -127,9 +96,11 @@ namespace System.Tests
 
             string[] expected = new[] { value };
 
+            Assert.Equal(expected, value.Split(',', count));
             Assert.Equal(expected, value.Split(',', count, options));
             Assert.Equal(expected, value.Split(new[] { ',' }, count));
             Assert.Equal(expected, value.Split(new[] { ',' }, count, options));
+            Assert.Equal(expected, value.Split(",", count));
             Assert.Equal(expected, value.Split(",", count, options));
             Assert.Equal(expected, value.Split(new[] { "," }, count, options));
         }
@@ -458,6 +429,25 @@ namespace System.Tests
             Assert.Equal(expected, value.Split(new[] { separator }, count, options));
             Assert.Equal(expected, value.Split(separator.ToString(), count, options));
             Assert.Equal(expected, value.Split(new[] { separator.ToString() }, count, options));
+            if (count == int.MaxValue)
+            {
+                Assert.Equal(expected, value.Split(separator, options));
+                Assert.Equal(expected, value.Split(new[] { separator }, options));
+                Assert.Equal(expected, value.Split(separator.ToString(), options));
+                Assert.Equal(expected, value.Split(new[] { separator.ToString() }, options));
+            }
+            if (options == StringSplitOptions.None)
+            {
+                Assert.Equal(expected, value.Split(separator, count));
+                Assert.Equal(expected, value.Split(new[] { separator }, count));
+                Assert.Equal(expected, value.Split(separator.ToString(), count));
+            }
+            if (count == int.MaxValue && options == StringSplitOptions.None)
+            {
+                Assert.Equal(expected, value.Split(separator));
+                Assert.Equal(expected, value.Split(new[] { separator }));
+                Assert.Equal(expected, value.Split(separator.ToString()));
+            }
         }
 
         [Theory]
@@ -470,6 +460,28 @@ namespace System.Tests
         {
             Assert.Equal(expected, value.Split(separator, count, options));
             Assert.Equal(expected, value.Split(new[] { separator }, count, options));
+            if (count == int.MaxValue)
+            {
+                Assert.Equal(expected, value.Split(separator, options));
+                Assert.Equal(expected, value.Split(new[] { separator }, options));
+            }
+            if (options == StringSplitOptions.None)
+            {
+                Assert.Equal(expected, value.Split(separator, count));
+            }
+            if (count == int.MaxValue && options == StringSplitOptions.None)
+            {
+                Assert.Equal(expected, value.Split(separator));
+            }
+        }
+
+        [Fact]
+        public static void SplitNullCharArraySeparator_BindsToCharArrayOverload()
+        {
+            string value = "a b c";
+            string[] expected = new[] { "a", "b", "c" };
+            // Ensure Split(null) compiles successfully as a call to Split(char[])
+            Assert.Equal(expected, value.Split(null));
         }
 
         [Theory]
@@ -477,10 +489,16 @@ namespace System.Tests
         [InlineData("a b c", new char[0], M, StringSplitOptions.None, new[] { "a", "b", "c" })]
         [InlineData("a,b,c", null, M, StringSplitOptions.None, new[] { "a,b,c" })]
         [InlineData("a,b,c", new char[0], M, StringSplitOptions.None, new[] { "a,b,c" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ' ' }, M, StringSplitOptions.None, new[] { "this,", "is,", "a,", "string,", "with", "some", "spaces" })]
         [InlineData("this, is, a, string, with some spaces", new[] { ' ', ',' }, M, StringSplitOptions.None, new[] { "this", "", "is", "", "a", "", "string", "", "with", "some", "spaces" })]
         [InlineData("this, is, a, string, with some spaces", new[] { ',', ' ' }, M, StringSplitOptions.None, new[] { "this", "", "is", "", "a", "", "string", "", "with", "some", "spaces" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ',', ' ', 's' }, M, StringSplitOptions.None, new[] { "thi", "", "", "i", "", "", "a", "", "", "tring", "", "with", "", "ome", "", "pace", "" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ',', ' ', 's', 'a' }, M, StringSplitOptions.None, new[] { "thi", "", "", "i", "", "", "", "", "", "", "tring", "", "with", "", "ome", "", "p", "ce", "" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ' ' }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "this,", "is,", "a,", "string,", "with", "some", "spaces" })]
         [InlineData("this, is, a, string, with some spaces", new[] { ' ', ',' }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "this", "is", "a", "string", "with", "some", "spaces" })]
         [InlineData("this, is, a, string, with some spaces", new[] { ',', ' ' }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "this", "is", "a", "string", "with", "some", "spaces" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ',', ' ', 's' }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "thi", "i", "a", "tring", "with", "ome", "pace" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ',', ' ', 's', 'a' }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "thi", "i", "tring", "with", "ome", "p", "ce" })]
         public static void SplitCharArraySeparator(string value, char[] separators, int count, StringSplitOptions options, string[] expected)
         {
             Assert.Equal(expected, value.Split(separators, count, options));
@@ -494,10 +512,16 @@ namespace System.Tests
         [InlineData("a,b,c", new string[0], M, StringSplitOptions.None, new[] { "a,b,c" })]
         [InlineData("a,b,c", new string[] { null }, M, StringSplitOptions.None, new[] { "a,b,c" })]
         [InlineData("a,b,c", new string[] { "" }, M, StringSplitOptions.None, new[] { "a,b,c" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { " " }, M, StringSplitOptions.None, new[] { "this,", "is,", "a,", "string,", "with", "some", "spaces" })]
         [InlineData("this, is, a, string, with some spaces", new[] { " ", ", " }, M, StringSplitOptions.None, new[] { "this", "is", "a", "string", "with", "some", "spaces" })]
         [InlineData("this, is, a, string, with some spaces", new[] { ", ", " " }, M, StringSplitOptions.None, new[] { "this", "is", "a", "string", "with", "some", "spaces" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ",", " ", "s" }, M, StringSplitOptions.None, new[] { "thi", "", "", "i", "", "", "a", "", "", "tring", "", "with", "", "ome", "", "pace", "" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ",", " ", "s", "a" }, M, StringSplitOptions.None, new[] { "thi", "", "", "i", "", "", "", "", "", "", "tring", "", "with", "", "ome", "", "p", "ce", "" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { " " }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "this,", "is,", "a,", "string,", "with", "some", "spaces" })]
         [InlineData("this, is, a, string, with some spaces", new[] { " ", ", " }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "this", "is", "a", "string", "with", "some", "spaces" })]
         [InlineData("this, is, a, string, with some spaces", new[] { ", ", " " }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "this", "is", "a", "string", "with", "some", "spaces" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ",", " ", "s" }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "thi", "i", "a", "tring", "with", "ome", "pace" })]
+        [InlineData("this, is, a, string, with some spaces", new[] { ",", " ", "s", "a" }, M, StringSplitOptions.RemoveEmptyEntries, new[] { "thi", "i", "tring", "with", "ome", "p", "ce" })]
         public static void SplitStringArraySeparator(string value, string[] separators, int count, StringSplitOptions options, string[] expected)
         {
             Assert.Equal(expected, value.Split(separators, count, options));

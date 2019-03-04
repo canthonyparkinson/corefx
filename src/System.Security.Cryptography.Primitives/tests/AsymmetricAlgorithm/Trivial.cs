@@ -42,6 +42,7 @@ namespace System.Security.Cryptography.Encryption.Tests.Asymmetric
         }
 
         [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "Throws NRE on netfx (https://github.com/dotnet/corefx/issues/18690)")]
         public static void ValidKeySizeUsesProperty()
         {
             using (AsymmetricAlgorithm aa = new DoesNotSetLegalKeySizesField())
@@ -51,6 +52,17 @@ namespace System.Security.Cryptography.Encryption.Tests.Asymmetric
                 aa.KeySize = 1048576;
             }
         }
+
+#if netcoreapp
+        [Fact]
+        public static void ClearCallsDispose()
+        {
+            Trivial s = new Trivial();
+            Assert.False(s.IsDisposed);
+            s.Clear();
+            Assert.True(s.IsDisposed);
+        }
+#endif
 
         [Fact]
         public static void TestInvalidAlgorithm()
@@ -81,6 +93,8 @@ namespace System.Security.Cryptography.Encryption.Tests.Asymmetric
 
         private class Trivial : AsymmetricAlgorithm
         {
+            bool _disposed;
+
             public Trivial()
             {
                 LegalKeySizesValue = new KeySizes[]
@@ -96,6 +110,17 @@ namespace System.Security.Cryptography.Encryption.Tests.Asymmetric
             {
                 KeySizeValue = keySize;
             }
+
+            protected override void Dispose(bool disposing)
+            {
+                base.Dispose(disposing);
+                if (disposing)
+                {
+                    _disposed = true;
+                }
+            }
+
+            public bool IsDisposed => _disposed;
         }
     }
 }

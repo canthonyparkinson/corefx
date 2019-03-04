@@ -135,7 +135,7 @@ namespace System.Threading.Tests
                 GC.WaitForPendingFinalizers();
                 GC.Collect();
                 return mres.IsSet;
-            }, 500);
+            }, 5000);
 
             Assert.True(mres.IsSet);
         }
@@ -197,7 +197,7 @@ namespace System.Threading.Tests
 
             private void Method()
             {
-                _foo = new Object();
+                _foo = new object();
                 _wFoo = new WeakReference(_foo);
 
                 new ThreadLocal<object>() { Value = _foo }.Dispose();
@@ -316,6 +316,7 @@ namespace System.Threading.Tests
         }
 
         [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.Mono, "This test requires precise stack scanning")]
         public static void RunThreadLocalTest8_Values_NegativeCases()
         {
             // Test that Dispose works and that objects are released on dispose
@@ -329,7 +330,7 @@ namespace System.Threading.Tests
                     GC.WaitForPendingFinalizers();
                     GC.Collect();
                     return mres.IsSet;
-                }, 1000);
+                }, 5000);
 
                 Assert.True(mres.IsSet, "RunThreadLocalTest8_Values: Expected thread local to release the object and for it to be finalized");
             }

@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Xunit;
 
 namespace System.Collections.Tests
@@ -101,6 +101,8 @@ namespace System.Collections.Tests
                     return CreateSortedSet(enumerableToMatchTo, count, numberOfMatchingElements);
                 case EnumerableType.Queue:
                     return CreateQueue(enumerableToMatchTo, count, numberOfMatchingElements, numberOfDuplicateElements);
+                case EnumerableType.Lazy:
+                    return CreateLazyEnumerable(enumerableToMatchTo, count, numberOfMatchingElements, numberOfDuplicateElements);
                 default:
                     Debug.Assert(false, "Check that the 'EnumerableType' Enum returns only types that are special-cased in the CreateEnumerable function within the Iset_Generic_Tests class");
                     return null;
@@ -224,7 +226,7 @@ namespace System.Collections.Tests
                 for (int i = 0; i < numberOfMatchingElements; i++)
                     set.Add(match[i]);
             }
-            
+
             // Add elements to reach the desired count
             while (set.Count < count)
             {
@@ -287,6 +289,12 @@ namespace System.Collections.Tests
             }
 
             return set;
+        }
+
+        protected IEnumerable<T> CreateLazyEnumerable(IEnumerable<T> enumerableToMatchTo, int count, int numberOfMatchingElements, int numberOfDuplicateElements)
+        {
+            IEnumerable<T> list = CreateList(enumerableToMatchTo, count, numberOfMatchingElements, numberOfDuplicateElements);
+            return list.Select(item => item);
         }
 
         #endregion

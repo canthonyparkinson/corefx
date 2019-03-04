@@ -2,16 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Data.Common;
 using System.Data.SqlClient;
 using System.Runtime.InteropServices;
 
 namespace System.Data.SqlClient
 {
-    internal static class SNINativeMethodWrapper
+    internal static partial class SNINativeMethodWrapper
     {
         private const string SNI = "sni.dll";
 
         private static int s_sniMaxComposedSpnLength = -1;
+
+        private const int SniOpenTimeOut = -1; // infinite
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         internal delegate void SqlAsyncCallbackDelegate(IntPtr m_ConsKey, IntPtr pPacket, uint dwError);
@@ -116,6 +119,13 @@ namespace System.Data.SqlClient
             SNI_QUERY_CONN_SUPPORTS_SYNC_OVER_ASYNC,
         }
 
+        internal enum TransparentNetworkResolutionMode : byte
+        {
+            DisabledMode = 0,
+            SequentialMode,
+            ParallelMode
+        };
+
         [StructLayout(LayoutKind.Sequential)]
         private struct Sni_Consumer_Info
         {
@@ -127,7 +137,7 @@ namespace System.Data.SqlClient
             public IntPtr fnAcceptComp;
             public uint dwNumProts;
             public IntPtr rgListenInfo;
-            public uint NodeAffinity;
+            public IntPtr NodeAffinity;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -148,6 +158,9 @@ namespace System.Data.SqlClient
             public int timeout;
             [MarshalAs(UnmanagedType.Bool)]
             public bool fParallel;
+            public TransparentNetworkResolutionMode transparentNetworkResolution;
+            public int totalTimeout;
+            public bool isAzureSqlServerEndpoint;
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -165,18 +178,6 @@ namespace System.Data.SqlClient
             internal uint lineNumber;
         }
 
-        internal enum SniSpecialErrors : uint
-        {
-            LocalDBErrorCode = 50,
-
-            // multi-subnet-failover specific error codes
-            MultiSubnetFailoverWithMoreThan64IPs = 47,
-            MultiSubnetFailoverWithInstanceSpecified = 48,
-            MultiSubnetFailoverWithNonTcpProtocol = 49,
-
-            // max error code value
-            MaxErrorValue = 50157
-        }
         #endregion
 
         #region DLL Imports
@@ -255,10 +256,10 @@ namespace System.Data.SqlClient
         private static extern uint SNIPacketGetDataWrapper([In] IntPtr packet, [In, Out] byte[] readBuffer, uint readBufferLength, out uint dataSize);
 
         [DllImport(SNI, CallingConvention = CallingConvention.Cdecl)]
-        private static unsafe extern void SNIPacketSetData(SNIPacket pPacket, [In] byte* pbBuf, uint cbBuf);
+        private static extern unsafe void SNIPacketSetData(SNIPacket pPacket, [In] byte* pbBuf, uint cbBuf);
 
         [DllImport(SNI, CallingConvention = CallingConvention.Cdecl)]
-        private static unsafe extern uint SNISecGenClientContextWrapper(
+        private static extern unsafe uint SNISecGenClientContextWrapper(
             [In] SNIHandle pConn,
             [In, Out] byte[] pIn,
             uint cbIn,
@@ -315,6 +316,10 @@ namespace System.Data.SqlClient
                 clientConsumerInfo.timeout = timeout;
                 clientConsumerInfo.fParallel = fParallel;
 
+                clientConsumerInfo.transparentNetworkResolution = TransparentNetworkResolutionMode.DisabledMode;
+                clientConsumerInfo.totalTimeout = SniOpenTimeOut;
+                clientConsumerInfo.isAzureSqlServerEndpoint = ADP.IsAzureSqlServerEndpoint(constring);
+
                 if (spnBuffer != null)
                 {
                     fixed (byte* pin_spnBuffer = &spnBuffer[0])
@@ -363,7 +368,7 @@ namespace System.Data.SqlClient
                     ref sendLength,
                     out local_fDone,
                     pin_serverUserName,
-                    (uint)(serverUserName == null ? 0 : serverUserName.Length),
+                    (uint)serverUserName.Length,
                     null,
                     null);
             }
@@ -397,9 +402,9 @@ namespace System.Data.SqlClient
 
 namespace System.Data
 {
-    internal static class SafeNativeMethods
+    internal static partial class SafeNativeMethods
     {
-        [DllImport("api-ms-win-core-libraryloader-l1-1-0.dll", CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true, SetLastError = true)]
+        [DllImport("kernel32.dll", CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true, SetLastError = true)]
         internal static extern IntPtr GetProcAddress(IntPtr HModule, [MarshalAs(UnmanagedType.LPStr), In] string funcName);
     }
 }

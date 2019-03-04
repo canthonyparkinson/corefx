@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
 using Xunit;
 
@@ -21,6 +20,7 @@ namespace System.Collections.Tests
         }
 
         [Fact]
+        [OuterLoop("Takes over 55% of System.Collections.Tests testing time")]
         public static void OutOfBoundsRegression()
         {
             var dictionary = new Dictionary<string, string>();

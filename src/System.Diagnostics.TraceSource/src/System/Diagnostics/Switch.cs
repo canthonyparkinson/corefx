@@ -7,6 +7,7 @@ using System.Threading;
 using System.Runtime.InteropServices;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
 
@@ -23,25 +24,26 @@ namespace System.Diagnostics
         private int _switchSetting = 0;
         private volatile bool _initialized = false;
         private bool _initializing = false;
-        private volatile string _switchValueString = String.Empty;
+        private volatile string _switchValueString = string.Empty;
         private string _defaultValue;
-        private object _intializedLock;
+        private object _initializedLock;
 
         private static List<WeakReference> s_switches = new List<WeakReference>();
         private static int s_LastCollectionCount;
+        private StringDictionary _attributes;
 
-        private object IntializedLock
+        private object InitializedLock
         {
             [SuppressMessage("Microsoft.Concurrency", "CA8001", Justification = "Reviewed for thread-safety")]
             get
             {
-                if (_intializedLock == null)
+                if (_initializedLock == null)
                 {
-                    Object o = new Object();
-                    Interlocked.CompareExchange<Object>(ref _intializedLock, o, null);
+                    object o = new object();
+                    Interlocked.CompareExchange<Object>(ref _initializedLock, o, null);
                 }
 
-                return _intializedLock;
+                return _initializedLock;
             }
         }
 
@@ -120,6 +122,17 @@ namespace System.Diagnostics
             }
         }
 
+        public StringDictionary Attributes 
+        {
+            get 
+            {
+                Initialize();
+                if (_attributes == null)
+                    _attributes = new StringDictionary();
+                return _attributes;
+            }
+        }
+
         /// <devdoc>
         ///    <para>
         ///     Indicates the current setting for this switch.
@@ -141,7 +154,7 @@ namespace System.Diagnostics
             set
             {
                 bool didUpdate = false;
-                lock (IntializedLock)
+                lock (InitializedLock)
                 {
                     _initialized = true;
                     if (_switchSetting != value)
@@ -157,6 +170,8 @@ namespace System.Diagnostics
                 }
             }
         }
+
+        protected internal virtual string[] GetSupportedAttributes() => null;
 
         protected string Value
         {
@@ -182,7 +197,7 @@ namespace System.Diagnostics
         {
             if (!_initialized)
             {
-                lock (IntializedLock)
+                lock (InitializedLock)
                 {
                     if (_initialized || _initializing)
                     {
@@ -215,7 +230,7 @@ namespace System.Diagnostics
 
         protected virtual void OnValueChanged()
         {
-            SwitchSetting = Int32.Parse(Value, CultureInfo.InvariantCulture);
+            SwitchSetting = int.Parse(Value, CultureInfo.InvariantCulture);
         }
 
         internal static void RefreshAll()
@@ -236,7 +251,7 @@ namespace System.Diagnostics
 
         internal void Refresh()
         {
-            lock (IntializedLock)
+            lock (InitializedLock)
             {
                 _initialized = false;
                 Initialize();

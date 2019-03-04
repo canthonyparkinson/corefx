@@ -1,4 +1,8 @@
-﻿using System.Collections;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
@@ -24,6 +28,14 @@ namespace System.Data.SqlClient
         public const string SqlBeforeCloseConnection = SqlClientPrefix + nameof(WriteConnectionCloseBefore);
         public const string SqlAfterCloseConnection = SqlClientPrefix + nameof(WriteConnectionCloseAfter);
         public const string SqlErrorCloseConnection = SqlClientPrefix + nameof(WriteConnectionCloseError);
+
+        public const string SqlBeforeCommitTransaction = SqlClientPrefix + nameof(WriteTransactionCommitBefore);
+        public const string SqlAfterCommitTransaction = SqlClientPrefix + nameof(WriteTransactionCommitAfter);
+        public const string SqlErrorCommitTransaction = SqlClientPrefix + nameof(WriteTransactionCommitError);
+
+        public const string SqlBeforeRollbackTransaction = SqlClientPrefix + nameof(WriteTransactionRollbackBefore);
+        public const string SqlAfterRollbackTransaction = SqlClientPrefix + nameof(WriteTransactionRollbackAfter);
+        public const string SqlErrorRollbackTransaction = SqlClientPrefix + nameof(WriteTransactionRollbackError);
 
         public static Guid WriteCommandBefore(this DiagnosticListener @this, SqlCommand sqlCommand, [CallerMemberName] string operation = "")
         {
@@ -196,6 +208,125 @@ namespace System.Data.SqlClient
                         ConnectionId = clientConnectionId,
                         Connection = sqlConnection,
                         Statistics = sqlConnection.Statistics?.GetDictionary(),
+                        Exception = ex,
+                        Timestamp = Stopwatch.GetTimestamp()
+                    });
+            }
+        }
+
+        public static Guid WriteTransactionCommitBefore(this DiagnosticListener @this, IsolationLevel isolationLevel, SqlConnection connection, [CallerMemberName] string operation = "")
+        {
+            if (@this.IsEnabled(SqlBeforeCommitTransaction))
+            {
+                Guid operationId = Guid.NewGuid();
+
+                @this.Write(
+                    SqlBeforeCommitTransaction,
+                    new
+                    {
+                        OperationId = operationId,
+                        Operation = operation,
+                        IsolationLevel = isolationLevel,
+                        Connection = connection,
+                        Timestamp = Stopwatch.GetTimestamp()
+                    });
+
+                return operationId;
+            }
+            else
+                return Guid.Empty;
+        }
+
+        public static void WriteTransactionCommitAfter(this DiagnosticListener @this, Guid operationId, IsolationLevel isolationLevel, SqlConnection connection, [CallerMemberName] string operation = "")
+        {
+            if (@this.IsEnabled(SqlAfterCommitTransaction))
+            {
+                @this.Write(
+                    SqlAfterCommitTransaction,
+                    new
+                    {
+                        OperationId = operationId,
+                        Operation = operation,
+                        IsolationLevel = isolationLevel,
+                        Connection = connection,
+                        Timestamp = Stopwatch.GetTimestamp()
+                    });
+            }
+        }
+
+        public static void WriteTransactionCommitError(this DiagnosticListener @this, Guid operationId, IsolationLevel isolationLevel, SqlConnection connection, Exception ex, [CallerMemberName] string operation = "")
+        {
+            if (@this.IsEnabled(SqlErrorCommitTransaction))
+            {
+                @this.Write(
+                    SqlErrorCommitTransaction,
+                    new
+                    {
+                        OperationId = operationId,
+                        Operation = operation,
+                        IsolationLevel = isolationLevel,
+                        Connection = connection,
+                        Exception = ex,
+                        Timestamp = Stopwatch.GetTimestamp()
+                    });
+            }
+        }
+
+        public static Guid WriteTransactionRollbackBefore(this DiagnosticListener @this, IsolationLevel isolationLevel, SqlConnection connection, string transactionName, [CallerMemberName] string operation = "")
+        {
+            if (@this.IsEnabled(SqlBeforeRollbackTransaction))
+            {
+                Guid operationId = Guid.NewGuid();
+
+                @this.Write(
+                    SqlBeforeRollbackTransaction,
+                    new
+                    {
+                        OperationId = operationId,
+                        Operation = operation,
+                        IsolationLevel = isolationLevel,
+                        Connection = connection,
+                        TransactionName = transactionName,
+                        Timestamp = Stopwatch.GetTimestamp()
+                    });
+
+                return operationId;
+            }
+            else
+                return Guid.Empty;
+        }
+
+        public static void WriteTransactionRollbackAfter(this DiagnosticListener @this, Guid operationId, IsolationLevel isolationLevel, SqlConnection connection, string transactionName, [CallerMemberName] string operation = "")
+        {
+            if (@this.IsEnabled(SqlAfterRollbackTransaction))
+            {
+                @this.Write(
+                    SqlAfterRollbackTransaction,
+                    new
+                    {
+                        OperationId = operationId,
+                        Operation = operation,
+                        IsolationLevel = isolationLevel,
+                        Connection = connection,
+                        TransactionName = transactionName,
+                        Timestamp = Stopwatch.GetTimestamp()
+                    });
+            }
+        }
+
+        public static void WriteTransactionRollbackError(this DiagnosticListener @this, Guid operationId, IsolationLevel isolationLevel, SqlConnection connection, string transactionName, Exception ex, [CallerMemberName] string operation = "")
+        {
+            if (@this.IsEnabled(SqlErrorRollbackTransaction))
+            {
+                @this.Write(
+                    SqlErrorRollbackTransaction,
+                    new
+                    {
+                        OperationId = operationId,
+                        Operation = operation,
+                        IsolationLevel = isolationLevel,
+                        Connection = connection,
+                        TransactionName = transactionName,
                         Exception = ex,
                         Timestamp = Stopwatch.GetTimestamp()
                     });

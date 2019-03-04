@@ -7,7 +7,7 @@ using System.Reflection.Metadata.Ecma335;
 
 namespace System.Reflection.Metadata
 {
-    public struct TypeSpecification
+    public readonly struct TypeSpecification
     {
         private readonly MetadataReader _reader;
 
@@ -33,9 +33,9 @@ namespace System.Reflection.Metadata
             get { return _reader.TypeSpecTable.GetSignature(Handle); }
         }
 
-        public TType DecodeSignature<TType>(ISignatureTypeProvider<TType> provider)
+        public TType DecodeSignature<TType, TGenericContext>(ISignatureTypeProvider<TType, TGenericContext> provider, TGenericContext genericContext)
         {
-            var decoder = new SignatureDecoder<TType>(provider, _reader);
+            var decoder = new SignatureDecoder<TType, TGenericContext>(provider, _reader, genericContext);
             var blobReader = _reader.GetBlobReader(Signature);
             return decoder.DecodeType(ref blobReader);
         }

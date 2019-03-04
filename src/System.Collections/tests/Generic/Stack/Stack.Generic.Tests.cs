@@ -1,9 +1,8 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using Xunit;
 
@@ -12,7 +11,7 @@ namespace System.Collections.Tests
     /// <summary>
     /// Contains tests that ensure the correctness of the Stack class.
     /// </summary>
-    public abstract class Stack_Generic_Tests<T> : IGenericSharedAPI_Tests<T>
+    public abstract partial class Stack_Generic_Tests<T> : IGenericSharedAPI_Tests<T>
     {
         #region Stack<T> Helper Methods
 
@@ -32,6 +31,8 @@ namespace System.Collections.Tests
             return stack;
         }
 
+        protected override Type IGenericSharedAPI_CopyTo_IndexLargerThanArrayCount_ThrowType => typeof(ArgumentOutOfRangeException);
+
         #endregion
 
         protected override IEnumerable<T> GenericIEnumerableFactory()
@@ -44,18 +45,18 @@ namespace System.Collections.Tests
             return GenericStackFactory(count);
         }
 
-        protected override int Count(IEnumerable<T> enumerable) { return ((Stack<T>)enumerable).Count; }
-        protected override void Add(IEnumerable<T> enumerable, T value) { ((Stack<T>)enumerable).Push(value); }
-        protected override void Clear(IEnumerable<T> enumerable) { ((Stack<T>)enumerable).Clear(); }
-        protected override bool Contains(IEnumerable<T> enumerable, T value) { return ((Stack<T>)enumerable).Contains(value); }
-        protected override void CopyTo(IEnumerable<T> enumerable, T[] array, int index) { ((Stack<T>)enumerable).CopyTo(array, index); }
+        protected override int Count(IEnumerable<T> enumerable) => ((Stack<T>)enumerable).Count;
+        protected override void Add(IEnumerable<T> enumerable, T value) => ((Stack<T>)enumerable).Push(value);
+        protected override void Clear(IEnumerable<T> enumerable) => ((Stack<T>)enumerable).Clear();
+        protected override bool Contains(IEnumerable<T> enumerable, T value) => ((Stack<T>)enumerable).Contains(value);
+        protected override void CopyTo(IEnumerable<T> enumerable, T[] array, int index) => ((Stack<T>)enumerable).CopyTo(array, index);
         protected override bool Remove(IEnumerable<T> enumerable) { ((Stack<T>)enumerable).Pop(); return true; }
-        protected override bool Enumerator_Current_UndefinedOperation_Throws { get { return true; } }
+        protected override bool Enumerator_Current_UndefinedOperation_Throws => true;
 
         #endregion
 
         #region Constructor
-        
+
         [Fact]
         public void Stack_Generic_Constructor_InitialValues()
         {
@@ -81,7 +82,7 @@ namespace System.Collections.Tests
         [Fact]
         public void Stack_Generic_Constructor_IEnumerable_Null_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>("collection", () => new Stack<T>(null));
+            AssertExtensions.Throws<ArgumentNullException>("collection", () => new Stack<T>(null));
         }
 
         #endregion
@@ -99,8 +100,8 @@ namespace System.Collections.Tests
         [Fact]
         public void Stack_Generic_Constructor_int_Negative_ThrowsArgumentOutOfRangeException()
         {
-            Assert.Throws<ArgumentOutOfRangeException>("capacity", () => new Stack<T>(-1));
-            Assert.Throws<ArgumentOutOfRangeException>("capacity", () => new Stack<T>(int.MinValue));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("capacity", () => new Stack<T>(-1));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("capacity", () => new Stack<T>(int.MinValue));
         }
 
         #endregion

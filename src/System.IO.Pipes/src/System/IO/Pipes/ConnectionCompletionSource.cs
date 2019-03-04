@@ -11,8 +11,8 @@ namespace System.IO.Pipes
         private readonly NamedPipeServerStream _serverStream;
 
         // Using RunContinuationsAsynchronously for compat reasons (old API used ThreadPool.QueueUserWorkItem for continuations)
-        internal ConnectionCompletionSource(NamedPipeServerStream server, CancellationToken cancellationToken)
-            : base(server._threadPoolBinding, cancellationToken, pinData: null)
+        internal ConnectionCompletionSource(NamedPipeServerStream server)
+            : base(server._threadPoolBinding, ReadOnlyMemory<byte>.Empty)
         {
             _serverStream = server;
         }
@@ -26,7 +26,7 @@ namespace System.IO.Pipes
         protected override void AsyncCallback(uint errorCode, uint numBytes)
         {
             // Special case for when the client has already connected to us.
-            if (errorCode == Interop.mincore.Errors.ERROR_PIPE_CONNECTED)
+            if (errorCode == Interop.Errors.ERROR_PIPE_CONNECTED)
             {
                 errorCode = 0;
             }
@@ -38,6 +38,8 @@ namespace System.IO.Pipes
         {
             TrySetException(Win32Marshal.GetExceptionForWin32Error(errorCode));
         }
+
+        protected override void HandleUnexpectedCancellation() => TrySetException(Error.GetOperationAborted());
     }
 
     internal struct VoidResult { }

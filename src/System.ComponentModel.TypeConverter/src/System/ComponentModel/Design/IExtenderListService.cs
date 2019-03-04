@@ -5,12 +5,12 @@
 namespace System.ComponentModel.Design
 {
     /// <summary>
-    ///    <para>Provides an interface to list extender providers.</para>
+    /// Provides an interface to list extender providers.
     /// </summary>
     public interface IExtenderListService
     {
         /// <summary>
-        ///    <para>Gets the set of extender providers for the component.</para>
+        /// Gets the set of extender providers for the component.
         /// </summary>
         IExtenderProvider[] GetExtenderProviders();
     }

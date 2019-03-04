@@ -10,7 +10,7 @@ using System.Reflection.Metadata.Ecma335;
 
 namespace System.Reflection.Metadata
 {
-    public struct ImportDefinitionCollection : IEnumerable<ImportDefinition>
+    public readonly struct ImportDefinitionCollection : IEnumerable<ImportDefinition>
     {
         private readonly MemoryBlock _block;
 
@@ -139,7 +139,7 @@ namespace System.Reflection.Metadata
 
             public void Reset()
             {
-                _reader.SeekOffset(0);
+                _reader.Reset();
                 _current = default(ImportDefinition);
             }
 

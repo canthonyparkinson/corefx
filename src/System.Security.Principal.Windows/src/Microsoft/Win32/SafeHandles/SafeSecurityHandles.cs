@@ -12,25 +12,15 @@ namespace Microsoft.Win32.SafeHandles
     {
         private SafeLsaMemoryHandle() : base(true) { }
 
-        private static SafeLsaMemoryHandle _invalidHandle = new SafeLsaMemoryHandle(IntPtr.Zero);
-
         // 0 is an Invalid Handle
         internal SafeLsaMemoryHandle(IntPtr handle) : base(true)
         {
             SetHandle(handle);
         }
 
-        internal static SafeLsaMemoryHandle InvalidHandle
-        {
-            get
-            {
-                return _invalidHandle;
-            }
-        }
-
         override protected bool ReleaseHandle()
         {
-            return Interop.mincore.LsaFreeMemory(handle) == 0;
+            return Interop.Advapi32.LsaFreeMemory(handle) == 0;
         }
     }
 
@@ -44,17 +34,9 @@ namespace Microsoft.Win32.SafeHandles
             SetHandle(handle);
         }
 
-        internal static SafeLsaPolicyHandle InvalidHandle
-        {
-            get
-            {
-                return new SafeLsaPolicyHandle(IntPtr.Zero);
-            }
-        }
-
         override protected bool ReleaseHandle()
         {
-            return Interop.mincore.LsaClose(handle) == 0;
+            return Interop.Advapi32.LsaClose(handle) == 0;
         }
     }
 
@@ -68,18 +50,10 @@ namespace Microsoft.Win32.SafeHandles
             SetHandle(handle);
         }
 
-        internal static SafeLsaReturnBufferHandle InvalidHandle
-        {
-            get
-            {
-                return new SafeLsaReturnBufferHandle(IntPtr.Zero);
-            }
-        }
-
         override protected bool ReleaseHandle()
         {
             // LsaFreeReturnBuffer returns an NTSTATUS
-            return Interop.mincore.LsaFreeReturnBuffer(handle) >= 0;
+            return Interop.SspiCli.LsaFreeReturnBuffer(handle) >= 0;
         }
     }
 }

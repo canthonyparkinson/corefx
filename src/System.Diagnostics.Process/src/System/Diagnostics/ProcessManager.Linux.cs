@@ -5,6 +5,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace System.Diagnostics
@@ -14,7 +15,7 @@ namespace System.Diagnostics
         /// <summary>Gets the IDs of all processes on the current machine.</summary>
         public static int[] GetProcessIds()
         {
-            return EnumerableHelpers.ToArray(EnumerateProcessIds());
+            return EnumerateProcessIds().ToArray();
         }
 
         /// <summary>Gets process infos for each process on the specified machine.</summary>
@@ -43,9 +44,9 @@ namespace System.Diagnostics
         /// <summary>Gets an array of module infos for the specified process.</summary>
         /// <param name="processId">The ID of the process whose modules should be enumerated.</param>
         /// <returns>The array of modules.</returns>
-        internal static ModuleInfo[] GetModuleInfos(int processId)
+        internal static ProcessModuleCollection GetModules(int processId)
         {
-            var modules = new List<ModuleInfo>();
+            var modules = new ProcessModuleCollection(0);
 
             // Process from the parsed maps file each entry representing a module
             foreach (Interop.procfs.ParsedMapsModule entry in Interop.procfs.ParseMapsModules(processId))
@@ -56,12 +57,12 @@ namespace System.Diagnostics
                 // the name and address ranges of sequential entries.
                 if (modules.Count > 0)
                 {
-                    ModuleInfo mi = modules[modules.Count - 1];
-                    if (mi._fileName == entry.FileName && 
-                        ((long)mi._baseOfDll + mi._sizeOfImage == entry.AddressRange.Key))
+                    ProcessModule module = modules[modules.Count - 1];
+                    if (module.FileName == entry.FileName &&
+                        ((long)module.BaseAddress + module.ModuleMemorySize == entry.AddressRange.Key))
                     {
                         // Merge this entry with the previous one
-                        modules[modules.Count - 1]._sizeOfImage += sizeOfImage;
+                        module.ModuleMemorySize += sizeOfImage;
                         continue;
                     }
                 }
@@ -69,19 +70,35 @@ namespace System.Diagnostics
                 // It's not a continuation of a previous entry but a new one: add it.
                 unsafe
                 {
-                    modules.Add(new ModuleInfo()
+                    modules.Add(new ProcessModule()
                     {
-                        _fileName = entry.FileName,
-                        _baseName = Path.GetFileName(entry.FileName),
-                        _baseOfDll = new IntPtr((void *)entry.AddressRange.Key),
-                        _sizeOfImage = sizeOfImage,
-                        _entryPoint = IntPtr.Zero // unknown
+                        FileName = entry.FileName,
+                        ModuleName = Path.GetFileName(entry.FileName),
+                        BaseAddress = new IntPtr(unchecked((void*)entry.AddressRange.Key)),
+                        ModuleMemorySize = sizeOfImage,
+                        EntryPointAddress = IntPtr.Zero // unknown
                     });
                 }
             }
 
+            // Move the main executable module to be the first in the list if it's not already
+            string exePath = Process.GetExePath(processId);
+            for (int i = 0; i < modules.Count; i++)
+            {
+                ProcessModule module = modules[i];
+                if (module.FileName == exePath)
+                {
+                    if (i > 0)
+                    {
+                        modules.RemoveAt(i);
+                        modules.Insert(0, module);
+                    }
+                    break;
+                }
+            }
+
             // Return the set of modules found
-            return modules.ToArray();
+            return modules;
         }
 
         // -----------------------------
@@ -117,7 +134,7 @@ namespace System.Diagnostics
                 ProcessName = procFsStat.comm,
                 BasePriority = (int)procFsStat.nice,
                 VirtualBytes = (long)procFsStat.vsize,
-                WorkingSet = procFsStat.rss,
+                WorkingSet = procFsStat.rss * Environment.SystemPageSize,
                 SessionId = procFsStat.session,
 
                 // We don't currently fill in the other values.
@@ -147,7 +164,7 @@ namespace System.Diagnostics
                                 _threadId = (ulong)tid,
                                 _basePriority = pi.BasePriority,
                                 _currentPriority = (int)stat.nice,
-                                _startAddress = (IntPtr)(void *)stat.startstack,
+                                _startAddress = IntPtr.Zero,
                                 _threadState = ProcFsStateToThreadState(stat.state),
                                 _threadWaitReason = ThreadWaitReason.Unknown
                             });
@@ -191,20 +208,34 @@ namespace System.Diagnostics
         /// <returns></returns>
         private static ThreadState ProcFsStateToThreadState(char c)
         {
+            // Information on these in fs/proc/array.c
+            // `man proc` does not document them all
             switch (c)
             {
-                case 'R':
+                case 'R': // Running
                     return ThreadState.Running;
-                case 'S':
-                case 'D':
-                case 'T':
+
+                case 'D': // Waiting on disk
+                case 'P': // Parked
+                case 'S': // Sleeping in a wait
+                case 't': // Tracing/debugging
+                case 'T': // Stopped on a signal
                     return ThreadState.Wait;
-                case 'Z':
+
+                case 'x': // dead
+                case 'X': // Dead
+                case 'Z': // Zombie
                     return ThreadState.Terminated;
-                case 'W':
+
+                case 'W': // Paging or waking
+                case 'K': // Wakekill
                     return ThreadState.Transition;
+
+                case 'I': // Idle
+                    return ThreadState.Ready;
+
                 default:
-                    Debug.Fail("Unexpected status character");
+                    Debug.Fail($"Unexpected status character: {c}");
                     return ThreadState.Unknown;
             }
         }

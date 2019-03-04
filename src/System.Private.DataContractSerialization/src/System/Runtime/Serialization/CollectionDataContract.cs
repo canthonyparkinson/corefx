@@ -10,15 +10,20 @@ namespace System.Runtime.Serialization
     using System.Collections;
     using System.Collections.Generic;
     using System.Reflection;
+    using System.Runtime.CompilerServices;
     using System.Threading;
     using System.Xml;
     using System.Linq;
     using DataContractDictionary = System.Collections.Generic.Dictionary<System.Xml.XmlQualifiedName, DataContract>;
     using System.Security;
 
+    // The interface is a perf optimization.
+    // Only KeyValuePairAdapter should implement the interface.
+    internal interface IKeyValuePairAdapter { }
+
     //Special Adapter class to serialize KeyValuePair as Dictionary needs it when polymorphism is involved
     [DataContract(Namespace = "http://schemas.datacontract.org/2004/07/System.Collections.Generic")]
-    internal class KeyValuePairAdapter<K, T>
+    internal class KeyValuePairAdapter<K, T> : IKeyValuePairAdapter
     {
         private K _kvpKey;
         private T _kvpValue;
@@ -32,14 +37,8 @@ namespace System.Runtime.Serialization
         [DataMember(Name = "key")]
         public K Key
         {
-            get
-            {
-                return _kvpKey;
-            }
-            set
-            {
-                _kvpKey = value;
-            }
+            get { return _kvpKey; }
+            set { _kvpKey = value; }
         }
 
         [DataMember(Name = "value")]
@@ -66,11 +65,21 @@ namespace System.Runtime.Serialization
         }
     }
 
+#if USE_REFEMIT
+    public interface IKeyValue
+#else
+    internal interface IKeyValue
+#endif
+    {
+        object Key { get; set; }
+        object Value { get; set; }
+    }
+
     [DataContract(Namespace = "http://schemas.microsoft.com/2003/10/Serialization/Arrays")]
 #if USE_REFEMIT
-    public struct KeyValue<K, V>
+    public struct KeyValue<K, V> : IKeyValue
 #else
-    internal struct KeyValue<K, V>
+    internal struct KeyValue<K, V> : IKeyValue
 #endif
     {
         private K _key;
@@ -95,9 +104,21 @@ namespace System.Runtime.Serialization
             get { return _value; }
             set { _value = value; }
         }
+
+        object IKeyValue.Key
+        {
+            get { return _key; }
+            set { _key = (K)value; }
+        }
+
+        object IKeyValue.Value
+        {
+            get { return _value; }
+            set { _value = (V)value; }
+        }
     }
 
-#if NET_NATIVE
+#if uapaot
     public enum CollectionKind : byte
 #else
     internal enum CollectionKind : byte
@@ -115,91 +136,47 @@ namespace System.Runtime.Serialization
         Array,
     }
 
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
     public sealed class CollectionDataContract : DataContract
 #else
     internal sealed class CollectionDataContract : DataContract
 #endif
     {
-        [SecurityCritical]
-        /// <SecurityNote>
-        /// Critical - XmlDictionaryString representing the XML element name for collection items.
-        ///            statically cached and used from IL generated code.
-        /// </SecurityNote>
         private XmlDictionaryString _collectionItemName;
-        [SecurityCritical]
-        /// <SecurityNote>
-        /// Critical - XmlDictionaryString representing the XML namespace for collection items.
-        ///            statically cached and used from IL generated code.
-        /// </SecurityNote>
-        private XmlDictionaryString _childElementNamespace;
-        [SecurityCritical]
-        /// <SecurityNote>
-        /// Critical - internal DataContract representing the contract for collection items.
-        ///            statically cached and used from IL generated code.
-        /// </SecurityNote>
-        private DataContract _itemContract;
-        [SecurityCritical]
 
-        /// <SecurityNote>
-        /// Critical - holds instance of CriticalHelper which keeps state that is cached statically for serialization. 
-        ///            Static fields are marked SecurityCritical or readonly to prevent
-        ///            data from being modified or leaked to other components in appdomain.
-        /// </SecurityNote>
+        private XmlDictionaryString _childElementNamespace;
+
+        private DataContract _itemContract;
+
         private CollectionDataContractCriticalHelper _helper;
 
-        [SecuritySafeCritical]
         public CollectionDataContract(CollectionKind kind) : base(new CollectionDataContractCriticalHelper(kind))
         {
             InitCollectionDataContract(this);
         }
 
-        /// <SecurityNote>
-        /// Critical - initializes SecurityCritical field 'helper'
-        /// Safe - doesn't leak anything
-        /// </SecurityNote>
-        [SecuritySafeCritical]
         internal CollectionDataContract(Type type) : base(new CollectionDataContractCriticalHelper(type))
         {
             InitCollectionDataContract(this);
         }
-        [SecuritySafeCritical]
 
-        /// <SecurityNote>
-        /// Critical - initializes SecurityCritical field 'helper'
-        /// Safe - doesn't leak anything
-        /// </SecurityNote>
         private CollectionDataContract(Type type, CollectionKind kind, Type itemType, MethodInfo getEnumeratorMethod, MethodInfo addMethod, ConstructorInfo constructor)
                     : base(new CollectionDataContractCriticalHelper(type, kind, itemType, getEnumeratorMethod, addMethod, constructor))
         {
             InitCollectionDataContract(GetSharedTypeContract(type));
         }
-        [SecuritySafeCritical]
 
-        /// <SecurityNote>
-        /// Critical - initializes SecurityCritical field 'helper'
-        /// Safe - doesn't leak anything
-        /// </SecurityNote>
         private CollectionDataContract(Type type, CollectionKind kind, Type itemType, MethodInfo getEnumeratorMethod, MethodInfo addMethod, ConstructorInfo constructor, bool isConstructorCheckRequired)
                     : base(new CollectionDataContractCriticalHelper(type, kind, itemType, getEnumeratorMethod, addMethod, constructor, isConstructorCheckRequired))
         {
             InitCollectionDataContract(GetSharedTypeContract(type));
         }
-        [SecuritySafeCritical]
 
-        /// <SecurityNote>
-        /// Critical - initializes SecurityCritical field 'helper'
-        /// Safe - doesn't leak anything
-        /// </SecurityNote>
         private CollectionDataContract(Type type, string invalidCollectionInSharedContractMessage) : base(new CollectionDataContractCriticalHelper(type, invalidCollectionInSharedContractMessage))
         {
             InitCollectionDataContract(GetSharedTypeContract(type));
         }
-        [SecurityCritical]
 
-        /// <SecurityNote>
-        /// Critical - initializes SecurityCritical fields; called from all constructors
-        /// </SecurityNote>
         private void InitCollectionDataContract(DataContract sharedTypeContract)
         {
             _helper = base.Helper as CollectionDataContractCriticalHelper;
@@ -213,33 +190,18 @@ namespace System.Runtime.Serialization
 
         private static Type[] KnownInterfaces
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical knownInterfaces property
-            /// Safe - knownInterfaces only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return CollectionDataContractCriticalHelper.KnownInterfaces; }
         }
 
         internal CollectionKind Kind
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical kind property
-            /// Safe - kind only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.Kind; }
         }
 
         public Type ItemType
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical itemType property
-            /// Safe - itemType only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.ItemType; }
             set { _helper.ItemType = value; }
@@ -247,19 +209,11 @@ namespace System.Runtime.Serialization
 
         public DataContract ItemContract
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical itemContract property
-            /// Safe - itemContract only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             {
                 return _itemContract ?? _helper.ItemContract;
             }
-            /// <SecurityNote>
-            /// Critical - sets the critical itemContract property
-            /// </SecurityNote>
-            [SecurityCritical]
+
             set
             {
                 _itemContract = value;
@@ -269,74 +223,39 @@ namespace System.Runtime.Serialization
 
         internal DataContract SharedTypeContract
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical sharedTypeContract property
-            /// Safe - sharedTypeContract only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.SharedTypeContract; }
         }
 
         public string ItemName
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical itemName property
-            /// Safe - itemName only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.ItemName; }
-            /// <SecurityNote>
-            /// Critical - sets the critical itemName property
-            /// </SecurityNote>
-            [SecurityCritical]
+
             set
             { _helper.ItemName = value; }
         }
 
         public XmlDictionaryString CollectionItemName
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical collectionItemName property
-            /// Safe - collectionItemName only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
-            get
-            { return _collectionItemName; }
+            get { return _collectionItemName; }
             set { _collectionItemName = value; }
         }
 
         public string KeyName
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical keyName property
-            /// Safe - keyName only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.KeyName; }
-            /// <SecurityNote>
-            /// Critical - sets the critical keyName property
-            /// </SecurityNote>
-            [SecurityCritical]
+
             set
             { _helper.KeyName = value; }
         }
 
         public string ValueName
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical valueName property
-            /// Safe - valueName only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.ValueName; }
-            /// <SecurityNote>
-            /// Critical - sets the critical valueName property
-            /// </SecurityNote>
-            [SecurityCritical]
+
             set
             { _helper.ValueName = value; }
         }
@@ -348,11 +267,6 @@ namespace System.Runtime.Serialization
 
         public XmlDictionaryString ChildElementNamespace
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical childElementNamespace property
-            /// Safe - childElementNamespace only needs to be protected for write; initialized in getter if null
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             {
                 if (_childElementNamespace == null)
@@ -375,101 +289,85 @@ namespace System.Runtime.Serialization
             }
         }
 
+        internal bool IsItemTypeNullable
+        {
+            get { return _helper.IsItemTypeNullable; }
+            set { _helper.IsItemTypeNullable = value; }
+        }
+
         internal bool IsConstructorCheckRequired
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical isConstructorCheckRequired property
-            /// Safe - isConstructorCheckRequired only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.IsConstructorCheckRequired; }
-            /// <SecurityNote>
-            /// Critical - sets the critical isConstructorCheckRequired property
-            /// </SecurityNote>
-            [SecurityCritical]
+
             set
             { _helper.IsConstructorCheckRequired = value; }
         }
 
         internal MethodInfo GetEnumeratorMethod
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical getEnumeratorMethod property
-            /// Safe - getEnumeratorMethod only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.GetEnumeratorMethod; }
         }
 
         internal MethodInfo AddMethod
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical addMethod property
-            /// Safe - addMethod only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.AddMethod; }
         }
 
         internal ConstructorInfo Constructor
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical constructor property
-            /// Safe - constructor only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.Constructor; }
         }
 
         public override DataContractDictionary KnownDataContracts
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical knownDataContracts property
-            /// Safe - knownDataContracts only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.KnownDataContracts; }
-            /// <SecurityNote>
-            /// Critical - sets the critical knownDataContracts property
-            /// </SecurityNote>
-            [SecurityCritical]
+
             set
             { _helper.KnownDataContracts = value; }
         }
 
         internal string InvalidCollectionInSharedContractMessage
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical invalidCollectionInSharedContractMessage property
-            /// Safe - invalidCollectionInSharedContractMessage only needs to be protected for write
-            /// </SecurityNote>
-            [SecuritySafeCritical]
             get
             { return _helper.InvalidCollectionInSharedContractMessage; }
         }
 
-#if !NET_NATIVE
-        internal XmlFormatCollectionWriterDelegate XmlFormatWriterDelegate
+#if uapaot
+        [RemovableFeature(ReflectionBasedSerializationFeature.Name)]
+#endif
+        private XmlFormatCollectionWriterDelegate CreateXmlFormatWriterDelegate()
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical xmlFormatWriterDelegate property
-            /// Safe - xmlFormatWriterDelegate only needs to be protected for write; initialized in getter if null
-            /// </SecurityNote>
-            [SecuritySafeCritical]
+            return new XmlFormatWriterGenerator().GenerateCollectionWriter(this);
+        }
+
+#if uapaot
+        private XmlFormatCollectionWriterDelegate _xmlFormatWriterDelegate;
+        public XmlFormatCollectionWriterDelegate XmlFormatWriterDelegate
+#else
+        internal XmlFormatCollectionWriterDelegate XmlFormatWriterDelegate
+#endif
+        {
             get
             {
+#if uapaot
+                if (DataContractSerializer.Option == SerializationOption.CodeGenOnly
+                || (DataContractSerializer.Option == SerializationOption.ReflectionAsBackup && _xmlFormatWriterDelegate != null))
+                {
+                    return _xmlFormatWriterDelegate;
+                }
+#endif
                 if (_helper.XmlFormatWriterDelegate == null)
                 {
                     lock (this)
                     {
                         if (_helper.XmlFormatWriterDelegate == null)
                         {
-                            XmlFormatCollectionWriterDelegate tempDelegate = new XmlFormatWriterGenerator().GenerateCollectionWriter(this);
+                            XmlFormatCollectionWriterDelegate tempDelegate = CreateXmlFormatWriterDelegate();
                             Interlocked.MemoryBarrier();
                             _helper.XmlFormatWriterDelegate = tempDelegate;
                         }
@@ -477,28 +375,45 @@ namespace System.Runtime.Serialization
                 }
                 return _helper.XmlFormatWriterDelegate;
             }
-        }
-#else
-        public XmlFormatCollectionWriterDelegate XmlFormatWriterDelegate { get; set; }
+            set
+            {
+#if uapaot
+                _xmlFormatWriterDelegate = value;
 #endif
+            }
+        }
 
-#if !NET_NATIVE
-        internal XmlFormatCollectionReaderDelegate XmlFormatReaderDelegate
+#if uapaot
+        [RemovableFeature(ReflectionBasedSerializationFeature.Name)]
+#endif
+        private XmlFormatCollectionReaderDelegate CreateXmlFormatReaderDelegate()
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical xmlFormatReaderDelegate property
-            /// Safe - xmlFormatReaderDelegate only needs to be protected for write; initialized in getter if null
-            /// </SecurityNote>
-            [SecuritySafeCritical]
+            return new XmlFormatReaderGenerator().GenerateCollectionReader(this);
+        }
+
+#if uapaot
+        private XmlFormatCollectionReaderDelegate _xmlFormatReaderDelegate;
+        public XmlFormatCollectionReaderDelegate XmlFormatReaderDelegate
+#else
+        internal XmlFormatCollectionReaderDelegate XmlFormatReaderDelegate
+#endif
+        {
             get
             {
+#if uapaot
+                if (DataContractSerializer.Option == SerializationOption.CodeGenOnly
+                || (DataContractSerializer.Option == SerializationOption.ReflectionAsBackup && _xmlFormatReaderDelegate != null))
+                {
+                    return _xmlFormatReaderDelegate;
+                }
+#endif
                 if (_helper.XmlFormatReaderDelegate == null)
                 {
                     lock (this)
                     {
                         if (_helper.XmlFormatReaderDelegate == null)
                         {
-                            XmlFormatCollectionReaderDelegate tempDelegate = new XmlFormatReaderGenerator().GenerateCollectionReader(this);
+                            XmlFormatCollectionReaderDelegate tempDelegate = CreateXmlFormatReaderDelegate();
                             Interlocked.MemoryBarrier();
                             _helper.XmlFormatReaderDelegate = tempDelegate;
                         }
@@ -506,33 +421,56 @@ namespace System.Runtime.Serialization
                 }
                 return _helper.XmlFormatReaderDelegate;
             }
-        }
-#else
-        public XmlFormatCollectionReaderDelegate XmlFormatReaderDelegate { get; set; }
+            set
+            {
+#if uapaot
+                _xmlFormatReaderDelegate = value;
 #endif
+            }
+        }
 
-#if !NET_NATIVE
-        internal XmlFormatGetOnlyCollectionReaderDelegate XmlFormatGetOnlyCollectionReaderDelegate
+#if uapaot
+        [RemovableFeature(ReflectionBasedSerializationFeature.Name)]
+#endif
+        private XmlFormatGetOnlyCollectionReaderDelegate CreateXmlFormatGetOnlyCollectionReaderDelegate()
         {
-            /// <SecurityNote>
-            /// Critical - fetches the critical xmlFormatReaderDelegate property
-            /// Safe - xmlFormatReaderDelegate only needs to be protected for write; initialized in getter if null
-            /// </SecurityNote>
-            [SecuritySafeCritical]
+            return new XmlFormatReaderGenerator().GenerateGetOnlyCollectionReader(this);
+        }
+
+
+#if uapaot
+        private XmlFormatGetOnlyCollectionReaderDelegate _xmlFormatGetOnlyCollectionReaderDelegate;
+        public XmlFormatGetOnlyCollectionReaderDelegate XmlFormatGetOnlyCollectionReaderDelegate
+#else
+        internal XmlFormatGetOnlyCollectionReaderDelegate XmlFormatGetOnlyCollectionReaderDelegate
+#endif
+        {
             get
             {
+#if uapaot
+                if (DataContractSerializer.Option == SerializationOption.CodeGenOnly
+                || (DataContractSerializer.Option == SerializationOption.ReflectionAsBackup && _xmlFormatGetOnlyCollectionReaderDelegate != null))
+                {
+                    return _xmlFormatGetOnlyCollectionReaderDelegate;
+                }
+#endif
                 if (_helper.XmlFormatGetOnlyCollectionReaderDelegate == null)
                 {
                     lock (this)
                     {
                         if (_helper.XmlFormatGetOnlyCollectionReaderDelegate == null)
                         {
-                            if (UnderlyingType.GetTypeInfo().IsInterface && (Kind == CollectionKind.Enumerable || Kind == CollectionKind.Collection || Kind == CollectionKind.GenericEnumerable))
+                            if (UnderlyingType.IsInterface && (Kind == CollectionKind.Enumerable || Kind == CollectionKind.Collection || Kind == CollectionKind.GenericEnumerable))
                             {
                                 throw DiagnosticUtility.ExceptionUtility.ThrowHelperError(new InvalidDataContractException(SR.Format(SR.GetOnlyCollectionMustHaveAddMethod, GetClrTypeFullName(UnderlyingType))));
                             }
-                            Debug.Assert(AddMethod != null || Kind == CollectionKind.Array, "Add method cannot be null if the collection is being used as a get-only property");
-                            XmlFormatGetOnlyCollectionReaderDelegate tempDelegate = new XmlFormatReaderGenerator().GenerateGetOnlyCollectionReader(this);
+
+                            if (Kind != CollectionKind.Array && AddMethod == null)
+                            {
+                                throw DiagnosticUtility.ExceptionUtility.ThrowHelperError(new InvalidDataContractException(SR.Format(SR.GetOnlyCollectionMustHaveAddMethod, GetClrTypeFullName(UnderlyingType))));
+                            }
+
+                            XmlFormatGetOnlyCollectionReaderDelegate tempDelegate = CreateXmlFormatGetOnlyCollectionReaderDelegate();
                             Interlocked.MemoryBarrier();
                             _helper.XmlFormatGetOnlyCollectionReaderDelegate = tempDelegate;
                         }
@@ -540,21 +478,35 @@ namespace System.Runtime.Serialization
                 }
                 return _helper.XmlFormatGetOnlyCollectionReaderDelegate;
             }
-        }
-#else
-        public XmlFormatGetOnlyCollectionReaderDelegate XmlFormatGetOnlyCollectionReaderDelegate { get; set; }
+            set
+            {
+#if uapaot
+                _xmlFormatGetOnlyCollectionReaderDelegate = value;
 #endif
+            }
+        }
 
-        [SecurityCritical]
-        /// <SecurityNote>
-        /// Critical - holds all state used for (de)serializing collections.
-        ///            since the data is cached statically, we lock down access to it.
-        /// </SecurityNote>
+        internal void IncrementCollectionCount(XmlWriterDelegator xmlWriter, object obj, XmlObjectSerializerWriteContext context)
+        {
+            _helper.IncrementCollectionCount(xmlWriter, obj, context);
+        }
+
+        internal IEnumerator GetEnumeratorForCollection(object obj)
+        {
+            return _helper.GetEnumeratorForCollection(obj);
+        }
+
+        internal Type GetCollectionElementType()
+        {
+            return _helper.GetCollectionElementType();
+        }
+
         private class CollectionDataContractCriticalHelper : DataContract.DataContractCriticalHelper
         {
             private static Type[] s_knownInterfaces;
 
             private Type _itemType;
+            private bool _isItemTypeNullable;
             private CollectionKind _kind;
             private readonly MethodInfo _getEnumeratorMethod, _addMethod;
             private readonly ConstructorInfo _constructor;
@@ -603,6 +555,7 @@ namespace System.Runtime.Serialization
                 if (itemType != null)
                 {
                     _itemType = itemType;
+                    _isItemTypeNullable = DataContract.IsTypeNullable(itemType);
 
                     bool isDictionary = (kind == CollectionKind.Dictionary || kind == CollectionKind.GenericDictionary);
                     string itemName = null, keyName = null, valueName = null;
@@ -672,7 +625,7 @@ namespace System.Runtime.Serialization
             {
                 if (getEnumeratorMethod == null)
                     throw System.Runtime.Serialization.DiagnosticUtility.ExceptionUtility.ThrowHelperError(new InvalidDataContractException(SR.Format(SR.CollectionMustHaveGetEnumeratorMethod, DataContract.GetClrTypeFullName(type))));
-                if (addMethod == null && !type.GetTypeInfo().IsInterface)
+                if (addMethod == null && !type.IsInterface)
                     throw System.Runtime.Serialization.DiagnosticUtility.ExceptionUtility.ThrowHelperError(new InvalidDataContractException(SR.Format(SR.CollectionMustHaveAddMethod, DataContract.GetClrTypeFullName(type))));
                 if (itemType == null)
                     throw System.Runtime.Serialization.DiagnosticUtility.ExceptionUtility.ThrowHelperError(new InvalidDataContractException(SR.Format(SR.CollectionMustHaveItemType, DataContract.GetClrTypeFullName(type))));
@@ -718,7 +671,7 @@ namespace System.Runtime.Serialization
                     {
                         if (IsDictionary)
                         {
-                            if (String.CompareOrdinal(KeyName, ValueName) == 0)
+                            if (string.CompareOrdinal(KeyName, ValueName) == 0)
                             {
                                 DataContract.ThrowInvalidDataContractException(
                                     SR.Format(SR.DupKeyValueName, DataContract.GetClrTypeFullName(UnderlyingType), KeyName),
@@ -730,11 +683,11 @@ namespace System.Runtime.Serialization
                         }
                         else
                         {
-#if NET_NATIVE
                             _itemContract = DataContract.GetDataContractFromGeneratedAssembly(ItemType);
-#else
-                            _itemContract = DataContract.GetDataContract(ItemType);
-#endif
+                            if (_itemContract == null)
+                            {
+                                _itemContract = DataContract.GetDataContract(ItemType);
+                            }
                         }
                     }
                     return _itemContract;
@@ -780,10 +733,7 @@ namespace System.Runtime.Serialization
                 set { _valueName = value; }
             }
 
-            internal bool IsDictionary
-            {
-                get { return KeyName != null; }
-            }
+            internal bool IsDictionary => KeyName != null;
 
             public XmlDictionaryString ChildElementNamespace
             {
@@ -791,24 +741,20 @@ namespace System.Runtime.Serialization
                 set { _childElementNamespace = value; }
             }
 
-            internal MethodInfo GetEnumeratorMethod
+            internal bool IsItemTypeNullable
             {
-                get { return _getEnumeratorMethod; }
+                get { return _isItemTypeNullable; }
+                set { _isItemTypeNullable = value; }
             }
 
-            internal MethodInfo AddMethod
-            {
-                get { return _addMethod; }
-            }
+            internal MethodInfo GetEnumeratorMethod => _getEnumeratorMethod;
 
-            internal ConstructorInfo Constructor
-            {
-                get { return _constructor; }
-            }
+            internal MethodInfo AddMethod => _addMethod;
+
+            internal ConstructorInfo Constructor => _constructor;
 
             internal override DataContractDictionary KnownDataContracts
             {
-                [SecurityCritical]
                 get
                 {
                     if (!_isKnownTypeAttributeChecked && UnderlyingType != null)
@@ -825,20 +771,14 @@ namespace System.Runtime.Serialization
                     }
                     return _knownDataContracts;
                 }
-                [SecurityCritical]
+
                 set
                 { _knownDataContracts = value; }
             }
 
-            internal string InvalidCollectionInSharedContractMessage
-            {
-                get { return _invalidCollectionInSharedContractMessage; }
-            }
+            internal string InvalidCollectionInSharedContractMessage => _invalidCollectionInSharedContractMessage;
 
-            internal bool ItemNameSetExplicit
-            {
-                get { return _itemNameSetExplicit; }
-            }
+            internal bool ItemNameSetExplicit => _itemNameSetExplicit;
 
             internal XmlFormatCollectionWriterDelegate XmlFormatWriterDelegate
             {
@@ -857,15 +797,183 @@ namespace System.Runtime.Serialization
                 get { return _xmlFormatGetOnlyCollectionReaderDelegate; }
                 set { _xmlFormatGetOnlyCollectionReaderDelegate = value; }
             }
+
+            private delegate void IncrementCollectionCountDelegate(XmlWriterDelegator xmlWriter, object obj, XmlObjectSerializerWriteContext context);
+
+            private IncrementCollectionCountDelegate _incrementCollectionCountDelegate = null;
+
+            private static void DummyIncrementCollectionCount(XmlWriterDelegator xmlWriter, object obj, XmlObjectSerializerWriteContext context) { }
+
+            internal void IncrementCollectionCount(XmlWriterDelegator xmlWriter, object obj, XmlObjectSerializerWriteContext context)
+            {
+                if (_incrementCollectionCountDelegate == null)
+                {
+                    switch (Kind)
+                    {
+                        case CollectionKind.Collection:
+                        case CollectionKind.List:
+                        case CollectionKind.Dictionary:
+                            {
+                                _incrementCollectionCountDelegate = (x, o, c) =>
+                                {
+                                    c.IncrementCollectionCount(x, (ICollection)o);
+                                };
+                            }
+                            break;
+                        case CollectionKind.GenericCollection:
+                        case CollectionKind.GenericList:
+                            {
+                                var buildIncrementCollectionCountDelegate = BuildIncrementCollectionCountDelegateMethod.MakeGenericMethod(ItemType);
+                                _incrementCollectionCountDelegate = (IncrementCollectionCountDelegate)buildIncrementCollectionCountDelegate.Invoke(null, Array.Empty<object>());
+                            }
+                            break;
+                        case CollectionKind.GenericDictionary:
+                            {
+                                var buildIncrementCollectionCountDelegate = BuildIncrementCollectionCountDelegateMethod.MakeGenericMethod(Globals.TypeOfKeyValuePair.MakeGenericType(ItemType.GetGenericArguments()));
+                                _incrementCollectionCountDelegate = (IncrementCollectionCountDelegate)buildIncrementCollectionCountDelegate.Invoke(null, Array.Empty<object>());
+                            }
+                            break;
+                        default:
+                            // Do nothing.
+                            _incrementCollectionCountDelegate = DummyIncrementCollectionCount;
+                            break;
+                    }
+                }
+
+                _incrementCollectionCountDelegate(xmlWriter, obj, context);
+            }
+
+            private static MethodInfo s_buildIncrementCollectionCountDelegateMethod;
+
+            private static MethodInfo BuildIncrementCollectionCountDelegateMethod
+            {
+                get
+                {
+                    if (s_buildIncrementCollectionCountDelegateMethod == null)
+                    {
+                        s_buildIncrementCollectionCountDelegateMethod = typeof(CollectionDataContractCriticalHelper).GetMethod(nameof(BuildIncrementCollectionCountDelegate), Globals.ScanAllMembers);
+                    }
+
+                    return s_buildIncrementCollectionCountDelegateMethod;
+                }
+            }
+
+            private static IncrementCollectionCountDelegate BuildIncrementCollectionCountDelegate<T>()
+            {
+                return (xmlwriter, obj, context) =>
+                {
+                    context.IncrementCollectionCountGeneric<T>(xmlwriter, (ICollection<T>)obj);
+
+                };
+            }
+
+            private delegate IEnumerator CreateGenericDictionaryEnumeratorDelegate(IEnumerator enumerator);
+
+            private CreateGenericDictionaryEnumeratorDelegate _createGenericDictionaryEnumeratorDelegate;
+
+            internal IEnumerator GetEnumeratorForCollection(object obj)
+            {
+                IEnumerator enumerator = ((IEnumerable)obj).GetEnumerator();
+                if (Kind == CollectionKind.GenericDictionary)
+                {
+                    if (_createGenericDictionaryEnumeratorDelegate == null)
+                    {
+                        var keyValueTypes = ItemType.GetGenericArguments();
+                        var buildCreateGenericDictionaryEnumerator = BuildCreateGenericDictionaryEnumerato.MakeGenericMethod(keyValueTypes[0], keyValueTypes[1]);
+                        _createGenericDictionaryEnumeratorDelegate = (CreateGenericDictionaryEnumeratorDelegate)buildCreateGenericDictionaryEnumerator.Invoke(null, Array.Empty<object>());
+                    }
+
+                    enumerator = _createGenericDictionaryEnumeratorDelegate(enumerator);
+                }
+                else if (Kind == CollectionKind.Dictionary)
+                {
+                    enumerator = new DictionaryEnumerator(((IDictionary)obj).GetEnumerator());
+                }
+
+                return enumerator;
+            }
+
+            internal Type GetCollectionElementType()
+            {
+                Type enumeratorType = null;
+                if (Kind == CollectionKind.GenericDictionary)
+                {
+                    Type[] keyValueTypes = ItemType.GetGenericArguments();
+                    enumeratorType = Globals.TypeOfGenericDictionaryEnumerator.MakeGenericType(keyValueTypes);
+                }
+                else if (Kind == CollectionKind.Dictionary)
+                {
+                    enumeratorType = Globals.TypeOfDictionaryEnumerator;
+                }
+                else
+                {
+                    enumeratorType = GetEnumeratorMethod.ReturnType;
+                }
+
+                MethodInfo getCurrentMethod = enumeratorType.GetMethod(Globals.GetCurrentMethodName, BindingFlags.Instance | BindingFlags.Public, Array.Empty<Type>());
+                if (getCurrentMethod == null)
+                {
+                    if (enumeratorType.IsInterface)
+                    {
+                        getCurrentMethod = XmlFormatGeneratorStatics.GetCurrentMethod;
+                    }
+                    else
+                    {
+                        Type ienumeratorInterface = Globals.TypeOfIEnumerator;
+                        if (Kind == CollectionKind.GenericDictionary || Kind == CollectionKind.GenericCollection || Kind == CollectionKind.GenericEnumerable)
+                        {
+                            Type[] interfaceTypes = enumeratorType.GetInterfaces();
+                            foreach (Type interfaceType in interfaceTypes)
+                            {
+                                if (interfaceType.IsGenericType
+                                    && interfaceType.GetGenericTypeDefinition() == Globals.TypeOfIEnumeratorGeneric
+                                    && interfaceType.GetGenericArguments()[0] == ItemType)
+                                {
+                                    ienumeratorInterface = interfaceType;
+                                    break;
+                                }
+                            }
+                        }
+
+                        getCurrentMethod = GetTargetMethodWithName(Globals.GetCurrentMethodName, enumeratorType, ienumeratorInterface);
+                    }
+                }
+
+                Type elementType = getCurrentMethod.ReturnType;
+                return elementType;
+            }
+
+            private static MethodInfo s_buildCreateGenericDictionaryEnumerator;
+
+            private static MethodInfo BuildCreateGenericDictionaryEnumerato
+            {
+                get
+                {
+                    if (s_buildCreateGenericDictionaryEnumerator == null)
+                    {
+                        s_buildCreateGenericDictionaryEnumerator = typeof(CollectionDataContractCriticalHelper).GetMethod(nameof(BuildCreateGenericDictionaryEnumerator), Globals.ScanAllMembers);
+                    }
+
+                    return s_buildCreateGenericDictionaryEnumerator;
+                }
+            }
+
+            private static CreateGenericDictionaryEnumeratorDelegate BuildCreateGenericDictionaryEnumerator<K, V>()
+            {
+                return (enumerator) =>
+                {
+                    return new GenericDictionaryEnumerator<K, V>((IEnumerator<KeyValuePair<K, V>>)enumerator);
+                };
+            }
         }
 
         private DataContract GetSharedTypeContract(Type type)
         {
-            if (type.GetTypeInfo().IsDefined(Globals.TypeOfCollectionDataContractAttribute, false))
+            if (type.IsDefined(Globals.TypeOfCollectionDataContractAttribute, false))
             {
                 return this;
             }
-            if (type.GetTypeInfo().IsDefined(Globals.TypeOfDataContractAttribute, false))
+            if (type.IsDefined(Globals.TypeOfDataContractAttribute, false))
             {
                 return new ClassDataContract(type);
             }
@@ -874,7 +982,7 @@ namespace System.Runtime.Serialization
 
         internal static bool IsCollectionInterface(Type type)
         {
-            if (type.GetTypeInfo().IsGenericType)
+            if (type.IsGenericType)
                 type = type.GetGenericTypeDefinition();
             return ((IList<Type>)KnownInterfaces).Contains(type);
         }
@@ -929,42 +1037,43 @@ namespace System.Runtime.Serialization
 
         internal static bool TryCreateGetOnlyCollectionDataContract(Type type, out DataContract dataContract)
         {
-#if !NET_NATIVE
-            Type itemType;
-            if (type.IsArray)
-            {
-                dataContract = new CollectionDataContract(type);
-                return true;
-            }
-            else
-            {
-                return IsCollectionOrTryCreate(type, true /*tryCreate*/, out dataContract, out itemType, false /*constructorRequired*/);
-            }
-#else
             dataContract = DataContract.GetDataContractFromGeneratedAssembly(type);
-            if (dataContract is CollectionDataContract)
+            if (dataContract == null)
             {
-                return true;
+                Type itemType;
+                if (type.IsArray)
+                {
+                    dataContract = new CollectionDataContract(type);
+                    return true;
+                }
+                else
+                {
+                    return IsCollectionOrTryCreate(type, true /*tryCreate*/, out dataContract, out itemType, false /*constructorRequired*/);
+                }
             }
             else
             {
-                dataContract = null;
-                return false;
+                if (dataContract is CollectionDataContract)
+                {
+                    return true;
+                }
+                else
+                {
+                    dataContract = null;
+                    return false;
+                }
             }
-#endif
         }
 
         internal static MethodInfo GetTargetMethodWithName(string name, Type type, Type interfaceType)
         {
             Type t = type.GetInterfaces().Where(it => it.Equals(interfaceType)).FirstOrDefault();
-            if (t == null)
-                return null;
-            return t.GetMethod(name);
+            return t?.GetMethod(name);
         }
 
         private static bool IsArraySegment(Type t)
         {
-            return t.GetTypeInfo().IsGenericType && (t.GetGenericTypeDefinition() == typeof(ArraySegment<>));
+            return t.IsGenericType && (t.GetGenericTypeDefinition() == typeof(ArraySegment<>));
         }
 
         private static bool IsCollectionOrTryCreate(Type type, bool tryCreate, out DataContract dataContract, out Type itemType, bool constructorRequired)
@@ -979,11 +1088,11 @@ namespace System.Runtime.Serialization
             }
             MethodInfo addMethod, getEnumeratorMethod;
             bool hasCollectionDataContract = IsCollectionDataContract(type);
-            Type baseType = type.GetTypeInfo().BaseType;
+            Type baseType = type.BaseType;
             bool isBaseTypeCollection = (baseType != null && baseType != Globals.TypeOfObject
                 && baseType != Globals.TypeOfValueType && baseType != Globals.TypeOfUri) ? IsCollection(baseType) : false;
 
-            if (type.GetTypeInfo().IsDefined(Globals.TypeOfDataContractAttribute, false))
+            if (type.IsDefined(Globals.TypeOfDataContractAttribute, false))
             {
                 return HandleIfInvalidCollection(type, tryCreate, hasCollectionDataContract, isBaseTypeCollection,
                     SR.CollectionTypeCannotHaveDataContract, null, ref dataContract);
@@ -999,16 +1108,16 @@ namespace System.Runtime.Serialization
                 return HandleIfInvalidCollection(type, tryCreate, hasCollectionDataContract, isBaseTypeCollection,
                     SR.CollectionTypeIsNotIEnumerable, null, ref dataContract);
             }
-            if (type.GetTypeInfo().IsInterface)
+            if (type.IsInterface)
             {
-                Type interfaceTypeToCheck = type.GetTypeInfo().IsGenericType ? type.GetGenericTypeDefinition() : type;
+                Type interfaceTypeToCheck = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
                 Type[] knownInterfaces = KnownInterfaces;
                 for (int i = 0; i < knownInterfaces.Length; i++)
                 {
                     if (knownInterfaces[i] == interfaceTypeToCheck)
                     {
                         addMethod = null;
-                        if (type.GetTypeInfo().IsGenericType)
+                        if (type.IsGenericType)
                         {
                             Type[] genericArgs = type.GetGenericArguments();
                             if (interfaceTypeToCheck == Globals.TypeOfIDictionaryGeneric)
@@ -1058,7 +1167,7 @@ namespace System.Runtime.Serialization
                 }
             }
             ConstructorInfo defaultCtor = null;
-            if (!type.GetTypeInfo().IsValueType)
+            if (!type.IsValueType)
             {
                 defaultCtor = type.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, Array.Empty<Type>());
                 if (defaultCtor == null && constructorRequired)
@@ -1074,7 +1183,7 @@ namespace System.Runtime.Serialization
             Type[] interfaceTypes = type.GetInterfaces();
             foreach (Type interfaceType in interfaceTypes)
             {
-                Type interfaceTypeToCheck = interfaceType.GetTypeInfo().IsGenericType ? interfaceType.GetGenericTypeDefinition() : interfaceType;
+                Type interfaceTypeToCheck = interfaceType.IsGenericType ? interfaceType.GetGenericTypeDefinition() : interfaceType;
                 Type[] knownInterfaces = KnownInterfaces;
                 for (int i = 0; i < knownInterfaces.Length; i++)
                 {
@@ -1104,7 +1213,7 @@ namespace System.Runtime.Serialization
             {
                 if (multipleDefinitions)
                     knownInterfaceType = Globals.TypeOfIEnumerable;
-                itemType = knownInterfaceType.GetTypeInfo().IsGenericType ? knownInterfaceType.GetGenericArguments()[0] : Globals.TypeOfObject;
+                itemType = knownInterfaceType.IsGenericType ? knownInterfaceType.GetGenericArguments()[0] : Globals.TypeOfObject;
                 GetCollectionMethods(type, knownInterfaceType, new Type[] { itemType },
                                      false /*addMethodOnInterface*/,
                                      out getEnumeratorMethod, out addMethod);
@@ -1128,7 +1237,7 @@ namespace System.Runtime.Serialization
                 {
                     case CollectionKind.GenericDictionary:
                         addMethodTypeArray = knownInterfaceType.GetGenericArguments();
-                        bool isOpenGeneric = knownInterfaceType.GetTypeInfo().IsGenericTypeDefinition
+                        bool isOpenGeneric = knownInterfaceType.IsGenericTypeDefinition
                             || (addMethodTypeArray[0].IsGenericParameter && addMethodTypeArray[1].IsGenericParameter);
                         itemType = isOpenGeneric ? Globals.TypeOfKeyValue : Globals.TypeOfKeyValue.MakeGenericType(addMethodTypeArray);
                         break;
@@ -1152,11 +1261,12 @@ namespace System.Runtime.Serialization
                     GetCollectionMethods(type, knownInterfaceType, addMethodTypeArray,
                                      true /*addMethodOnInterface*/,
                                      out getEnumeratorMethod, out addMethod);
-#if !NET_NATIVE
-                    dataContract = new CollectionDataContract(type, kind, itemType, getEnumeratorMethod, addMethod, defaultCtor, !constructorRequired);
-#else
+
                     dataContract = DataContract.GetDataContractFromGeneratedAssembly(type);
-#endif
+                    if (dataContract == null)
+                    {
+                        dataContract = new CollectionDataContract(type, kind, itemType, getEnumeratorMethod, addMethod, defaultCtor, !constructorRequired);
+                    }
                 }
             }
 
@@ -1165,7 +1275,7 @@ namespace System.Runtime.Serialization
 
         internal static bool IsCollectionDataContract(Type type)
         {
-            return type.GetTypeInfo().IsDefined(Globals.TypeOfCollectionDataContractAttribute, false);
+            return type.IsDefined(Globals.TypeOfCollectionDataContractAttribute, false);
         }
 
         private static bool HandleIfInvalidCollection(Type type, bool tryCreate, bool hasCollectionDataContract, bool createContractWithException, string message, string param, ref DataContract dataContract)
@@ -1215,6 +1325,10 @@ namespace System.Runtime.Serialization
                     if (addMethod == null)
                     {
                         Type[] parentInterfaceTypes = interfaceType.GetInterfaces();
+                        // The for loop below depeneds on the order for the items in parentInterfaceTypes, which
+                        // doesnt' seem right. But it's the behavior of DCS on the full framework.
+                        // Sorting the array to make sure the behavior is consistent with Desktop's.
+                        Array.Sort(parentInterfaceTypes, (x, y) => string.Compare(x.FullName, y.FullName));
                         foreach (Type parentInterfaceType in parentInterfaceTypes)
                         {
                             if (IsKnownInterface(parentInterfaceType))
@@ -1252,7 +1366,7 @@ namespace System.Runtime.Serialization
 
         private static bool IsKnownInterface(Type type)
         {
-            Type typeToCheck = type.GetTypeInfo().IsGenericType ? type.GetGenericTypeDefinition() : type;
+            Type typeToCheck = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
             foreach (Type knownInterfaceType in KnownInterfaces)
             {
                 if (typeToCheck == knownInterfaceType)
@@ -1280,10 +1394,6 @@ namespace System.Runtime.Serialization
             return this;
         }
 
-        /// <SecurityNote>
-        /// Critical - sets the critical IsConstructorCheckRequired property on CollectionDataContract 
-        /// </SecurityNote>
-        [SecuritySafeCritical]
         private void CheckConstructor()
         {
             if (this.Constructor == null)
@@ -1411,7 +1521,7 @@ namespace System.Runtime.Serialization
             {
                 // IsGetOnlyCollection value has already been used to create current collectiondatacontract, value can now be reset. 
                 context.IsGetOnlyCollection = false;
-#if NET_NATIVE
+#if uapaot
                 if (XmlFormatGetOnlyCollectionReaderDelegate == null)
                 {
                     throw new InvalidDataContractException(SR.Format(SR.SerializationCodeIsMissingForType, UnderlyingType.ToString()));

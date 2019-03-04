@@ -1,0 +1,8 @@
+﻿<Project DefaultTargets="Build">
+  <PropertyGroup>
+    <BuildConfigurations>
+      netstandard1.0;
+      netstandard;
+    </BuildConfigurations>
+  </PropertyGroup>
+</Project>

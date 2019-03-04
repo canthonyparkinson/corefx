@@ -44,9 +44,38 @@ namespace Internal.Cryptography.Pal.Native
     /// </summary>
     internal class SafeCertContextHandle : SafePointerHandle<SafeCertContextHandle>
     {
+        private SafeCertContextHandle _parent;
+
+        public SafeCertContextHandle() { }
+
+        public SafeCertContextHandle(SafeCertContextHandle parent)
+        {
+            if (parent == null)
+                throw new ArgumentNullException(nameof(parent));
+
+            Debug.Assert(!parent.IsInvalid);
+            Debug.Assert(!parent.IsClosed);
+
+            bool ignored = false;
+            parent.DangerousAddRef(ref ignored);
+            _parent = parent;
+
+            SetHandle(_parent.handle);
+        }
+
         protected override bool ReleaseHandle()
         {
-            Interop.crypt32.CertFreeCertificateContext(handle);  // CertFreeCertificateContext always returns true so checking the return value is pointless.
+            if (_parent != null)
+            {
+                _parent.DangerousRelease();
+                _parent = null;
+            }
+            else
+            {
+                Interop.Crypt32.CertFreeCertificateContext(handle);
+            }
+
+            SetHandle(IntPtr.Zero);
             return true;
         }
 
@@ -63,19 +92,36 @@ namespace Internal.Cryptography.Pal.Native
             return pCertContext;
         }
 
+        public bool HasPersistedPrivateKey
+        {
+            get { return CertHasProperty(CertContextPropId.CERT_KEY_PROV_INFO_PROP_ID); }
+        }
+
+        public bool HasEphemeralPrivateKey
+        {
+            get { return CertHasProperty(CertContextPropId.CERT_KEY_CONTEXT_PROP_ID); }
+        }
+
         public bool ContainsPrivateKey
         {
-            get
-            {
-                int cb = 0;
-                bool containsPrivateKey = Interop.crypt32.CertGetCertificateContextProperty(this, CertContextPropId.CERT_KEY_PROV_INFO_PROP_ID, null, ref cb);
-                return containsPrivateKey;
-            }
+            get { return HasPersistedPrivateKey || HasEphemeralPrivateKey; }
         }
 
         public SafeCertContextHandle Duplicate()
         {
             return Interop.crypt32.CertDuplicateCertificateContext(handle);
+        }
+
+        private bool CertHasProperty(CertContextPropId propertyId)
+        {
+            int cb = 0;
+            bool hasProperty = Interop.crypt32.CertGetCertificateContextProperty(
+                this,
+                propertyId,
+                null,
+                ref cb);
+
+            return hasProperty;
         }
     }
 
@@ -118,7 +164,7 @@ namespace Internal.Cryptography.Pal.Native
                     {
                         // dwProvType being 0 indicates that the key is stored in CNG.
                         // dwProvType being non-zero indicates that the key is stored in CAPI.
-                            
+
                         string providerName = Marshal.PtrToStringUni((IntPtr)(pProvInfo->pwszProvName));
                         string keyContainerName = Marshal.PtrToStringUni((IntPtr)(pProvInfo->pwszContainerName));
 
@@ -137,7 +183,6 @@ namespace Internal.Cryptography.Pal.Native
                     }
                     else
                     {
-#if !NETNATIVE // For UWP, CryptAcquireContext() is a disallowed api, even when being used for cleanup. CAPI keys should not exist on that platform, however...
                         CryptAcquireContextFlags flags = (pProvInfo->dwFlags & CryptAcquireContextFlags.CRYPT_MACHINE_KEYSET) | CryptAcquireContextFlags.CRYPT_DELETEKEYSET;
                         IntPtr hProv;
                         bool success = Interop.cryptoapi.CryptAcquireContext(out hProv, pProvInfo->pwszContainerName, pProvInfo->pwszProvName, pProvInfo->dwProvType, flags);
@@ -145,7 +190,6 @@ namespace Internal.Cryptography.Pal.Native
                         // Called CryptAcquireContext solely for the side effect of deleting the key containers. When called with these flags, no actual
                         // hProv is returned (so there's nothing to clean up.)
                         Debug.Assert(hProv == IntPtr.Zero);
-#endif
                     }
                 }
             }
@@ -159,7 +203,7 @@ namespace Internal.Cryptography.Pal.Native
     {
         protected sealed override bool ReleaseHandle()
         {
-            bool success = Interop.crypt32.CertCloseStore(handle, 0);
+            bool success = Interop.Crypt32.CertCloseStore(handle, 0);
             return success;
         }
     }
@@ -171,7 +215,7 @@ namespace Internal.Cryptography.Pal.Native
     {
         protected sealed override bool ReleaseHandle()
         {
-            bool success = Interop.crypt32.CryptMsgClose(handle);
+            bool success = Interop.Crypt32.CryptMsgClose(handle);
             return success;
         }
     }

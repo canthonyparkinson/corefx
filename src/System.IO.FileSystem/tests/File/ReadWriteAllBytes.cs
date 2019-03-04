@@ -4,6 +4,7 @@
 
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace System.IO.Tests
@@ -61,24 +62,11 @@ namespace System.IO.Tests
         public void ReadFileOver2GB()
         {
             string path = GetTestFilePath();
-            int split = 10;
-            string toWrite = new string('a', Int32.MaxValue / split);
-            using (var writer = new StreamWriter(File.Create(path)))
+            using (FileStream fs = File.Create(path))
             {
-                for (int i = 0; i < (split + 1); i++)
-                {
-                    try
-                    {
-                        writer.Write(toWrite);
-                        writer.Flush();
-                    }
-                    catch (OutOfMemoryException)
-                    {
-                        split /= 2;
-                        toWrite = new string('a', Int32.MaxValue / split);
-                    }
-                }
+                fs.SetLength(int.MaxValue + 1L);
             }
+
             // File is too large for ReadAllBytes at once
             Assert.Throws<IOException>(() => File.ReadAllBytes(path));
         }
@@ -132,6 +120,58 @@ namespace System.IO.Tests
             {
                 File.SetAttributes(path, FileAttributes.Normal);
             }
+        }
+
+        [Fact]
+        public void EmptyFile_ReturnsEmptyArray()
+        {
+            string path = GetTestFilePath();
+            File.Create(path).Dispose();
+            Assert.Equal(0, File.ReadAllBytes(path).Length);
+        }
+
+        [Theory]
+        [PlatformSpecific(TestPlatforms.Linux)]
+        [InlineData("/proc/cmdline")]
+        [InlineData("/proc/version")]
+        [InlineData("/proc/filesystems")]
+        public void ProcFs_EqualsReadAllText(string path)
+        {
+            byte[] bytes = null;
+            string text = null;
+
+            const int NumTries = 3; // some of these could theoretically change between reads, so allow retries just in case
+            for (int i = 1; i <= NumTries; i++)
+            {
+                try
+                {
+                    bytes = File.ReadAllBytes(path);
+                    text = File.ReadAllText(path);
+                    Assert.Equal(text, Encoding.UTF8.GetString(bytes));
+                }
+                catch when (i < NumTries) { }
+            }
+        }
+
+        [Theory]
+        [PlatformSpecific(TestPlatforms.Linux)]
+        public void ReadAllBytes_ProcFs_Uptime_ContainsTwoNumbers()
+        {
+            string text = Encoding.UTF8.GetString(File.ReadAllBytes("/proc/uptime"));
+            string[] parts = text.Split(new [] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal(2, parts.Length);
+            Assert.True(double.TryParse(parts[0].Trim(), out _));
+            Assert.True(double.TryParse(parts[1].Trim(), out _));
+        }
+
+        [Theory]
+        [PlatformSpecific(TestPlatforms.Linux)]
+        [InlineData("/proc/meminfo")]
+        [InlineData("/proc/stat")]
+        [InlineData("/proc/cpuinfo")]
+        public void ProcFs_NotEmpty(string path)
+        {
+            Assert.InRange(File.ReadAllBytes(path).Length, 1, int.MaxValue);
         }
     }
 }

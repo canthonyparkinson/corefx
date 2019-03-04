@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Diagnostics;
-using System.Diagnostics.Contracts;
 
 namespace System.Net.Http.Headers
 {
@@ -38,14 +37,14 @@ namespace System.Net.Http.Headers
 
         public AuthenticationHeaderValue(string scheme, string parameter)
         {
-            HeaderUtilities.CheckValidToken(scheme, "scheme");
+            HeaderUtilities.CheckValidToken(scheme, nameof(scheme));
             _scheme = scheme;
             _parameter = parameter;
         }
 
         private AuthenticationHeaderValue(AuthenticationHeaderValue source)
         {
-            Contract.Requires(source != null);
+            Debug.Assert(source != null);
 
             _scheme = source._scheme;
             _parameter = source._parameter;
@@ -120,7 +119,7 @@ namespace System.Net.Http.Headers
 
         internal static int GetAuthenticationLength(string input, int startIndex, out object parsedValue)
         {
-            Contract.Requires(startIndex >= 0);
+            Debug.Assert(startIndex >= 0);
 
             parsedValue = null;
 
@@ -137,8 +136,19 @@ namespace System.Net.Http.Headers
                 return 0;
             }
 
-            AuthenticationHeaderValue result = new AuthenticationHeaderValue();
-            result._scheme = input.Substring(startIndex, schemeLength);
+            var result = new AuthenticationHeaderValue();
+            string targetScheme = null;
+            switch (schemeLength)
+            {
+                // Avoid allocating a scheme string for the most common cases.
+                case 5: targetScheme = "Basic"; break;
+                case 6: targetScheme = "Digest"; break;
+                case 4: targetScheme = "NTLM"; break;
+                case 9: targetScheme = "Negotiate"; break;
+            }
+            result._scheme = targetScheme != null && string.CompareOrdinal(input, startIndex, targetScheme, 0, schemeLength) == 0 ?
+                targetScheme :
+                input.Substring(startIndex, schemeLength);
 
             int current = startIndex + schemeLength;
             int whitespaceLength = HttpRuleParser.GetWhitespaceLength(input, current);
@@ -151,7 +161,7 @@ namespace System.Net.Http.Headers
                 return current - startIndex;
             }
 
-            // We need at least one space between the scheme and parameters. If there are no whitespace, then we must
+            // We need at least one space between the scheme and parameters. If there is no whitespace, then we must
             // have reached the end of the string (i.e. scheme-only string).
             if (whitespaceLength == 0)
             {
@@ -227,7 +237,7 @@ namespace System.Net.Http.Headers
 
         private static bool TryGetParametersEndIndex(string input, ref int parseEndIndex, ref int parameterEndIndex)
         {
-            Contract.Requires(parseEndIndex < input.Length, "Expected string to have at least 1 char");
+            Debug.Assert(parseEndIndex < input.Length, "Expected string to have at least 1 char");
             Debug.Assert(input[parseEndIndex] == ',');
 
             int current = parseEndIndex;

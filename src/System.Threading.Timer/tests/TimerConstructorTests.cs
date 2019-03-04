@@ -6,7 +6,7 @@ using System;
 using System.Threading;
 using Xunit;
 
-public class TimerConstructorTests
+public partial class TimerConstructorTests
 {
     private void EmptyTimerTarget(object o) { }
 
@@ -71,5 +71,21 @@ public class TimerConstructorTests
         {
             using (var t = new Timer(null, null /* not relevant */, new TimeSpan(1) /* not relevant */, new TimeSpan(1) /* not relevant */)) { }
         }));
+    }
+
+    [Fact]
+    public void Timer_Constructor_CallbackOnly_Negative()
+    {
+        Assert.Throws<ArgumentNullException>(() => new Timer(null));
+    }
+
+    [Fact]
+    public void Timer_Constructor_Int64_Negative()
+    {
+        Assert.Throws<ArgumentNullException>(() => new Timer(null, null, (long)-1, (long)-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Timer(EmptyTimerTarget, null, (long)-2, (long)-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Timer(EmptyTimerTarget, null, (long)-1, (long)-2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Timer(EmptyTimerTarget, null, (long)0xffffffff, (long)-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Timer(EmptyTimerTarget, null, (long)-1, (long)0xffffffff));
     }
 }

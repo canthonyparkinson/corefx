@@ -1,0 +1,9 @@
+﻿<Project>
+  <PropertyGroup>
+    <BuildConfigurations>
+      uapaot-Windows_NT;
+      netcoreappaot-Windows_NT;
+      netcoreappaot-WebAssembly;
+    </BuildConfigurations>
+  </PropertyGroup>
+</Project>

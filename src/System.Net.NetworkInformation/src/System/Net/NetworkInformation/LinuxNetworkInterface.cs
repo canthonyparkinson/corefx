@@ -14,7 +14,7 @@ namespace System.Net.NetworkInformation
     internal class LinuxNetworkInterface : UnixNetworkInterface
     {
         private readonly OperationalStatus _operationalStatus;
-        private readonly bool _supportsMulticast;
+        private readonly bool? _supportsMulticast;
         private readonly long? _speed;
         private readonly LinuxIPInterfaceProperties _ipProperties;
 
@@ -26,27 +26,80 @@ namespace System.Net.NetworkInformation
             _ipProperties = new LinuxIPInterfaceProperties(this);
         }
 
-        public unsafe static NetworkInterface[] GetLinuxNetworkInterfaces()
+        public static unsafe NetworkInterface[] GetLinuxNetworkInterfaces()
         {
             Dictionary<string, LinuxNetworkInterface> interfacesByName = new Dictionary<string, LinuxNetworkInterface>();
-            Interop.Sys.EnumerateInterfaceAddresses(
-                (name, ipAddr, maskAddr) =>
+            List<Exception> exceptions = null;
+            const int MaxTries = 3;
+            for (int attempt = 0; attempt < MaxTries; attempt++)
+            {
+                // Because these callbacks are executed in a reverse-PInvoke, we do not want any exceptions
+                // to propogate out, because they will not be catchable. Instead, we track all the exceptions
+                // that are thrown in these callbacks, and aggregate them at the end.
+                int result = Interop.Sys.EnumerateInterfaceAddresses(
+                    (name, ipAddr, maskAddr) =>
+                    {
+                        try
+                        {
+                            LinuxNetworkInterface lni = GetOrCreate(interfacesByName, name);
+                            lni.ProcessIpv4Address(ipAddr, maskAddr);
+                        }
+                        catch (Exception e)
+                        {
+                            if (exceptions == null)
+                            {
+                                exceptions = new List<Exception>();
+                            }
+                            exceptions.Add(e);
+                        }
+                    },
+                    (name, ipAddr, scopeId) =>
+                    {
+                        try
+                        {
+                            LinuxNetworkInterface lni = GetOrCreate(interfacesByName, name);
+                            lni.ProcessIpv6Address(ipAddr, *scopeId);
+                        }
+                        catch (Exception e)
+                        {
+                            if (exceptions == null)
+                            {
+                                exceptions = new List<Exception>();
+                            }
+                            exceptions.Add(e);
+                        }
+                    },
+                    (name, llAddr) =>
+                    {
+                        try
+                        {
+                            LinuxNetworkInterface lni = GetOrCreate(interfacesByName, name);
+                            lni.ProcessLinkLayerAddress(llAddr);
+                        }
+                        catch (Exception e)
+                        {
+                            if (exceptions == null)
+                            {
+                                exceptions = new List<Exception>();
+                            }
+                            exceptions.Add(e);
+                        }
+                    });
+                if (exceptions != null)
                 {
-                    LinuxNetworkInterface lni = GetOrCreate(interfacesByName, name);
-                    lni.ProcessIpv4Address(ipAddr, maskAddr);
-                },
-                (name, ipAddr, scopeId) =>
+                    throw new NetworkInformationException(SR.net_PInvokeError, new AggregateException(exceptions));
+                }
+                else if (result == 0)
                 {
-                    LinuxNetworkInterface lni = GetOrCreate(interfacesByName, name);
-                    lni.ProcessIpv6Address( ipAddr, *scopeId);
-                },
-                (name, llAddr) =>
+                    return interfacesByName.Values.ToArray();
+                }
+                else
                 {
-                    LinuxNetworkInterface lni = GetOrCreate(interfacesByName, name);
-                    lni.ProcessLinkLayerAddress(llAddr);
-                });
+                    interfacesByName.Clear();
+                }
+            }
 
-            return interfacesByName.Values.ToArray();
+            throw new NetworkInformationException(SR.net_PInvokeError);
         }
 
         /// <summary>
@@ -68,15 +121,39 @@ namespace System.Net.NetworkInformation
             return lni;
         }
 
-        public override bool SupportsMulticast { get { return _supportsMulticast; } }
+        public override bool SupportsMulticast
+        {
+            get
+            {
+                if (_supportsMulticast.HasValue)
+                {
+                    return _supportsMulticast.Value;
+                }
+                else
+                {
+                    throw new PlatformNotSupportedException(SR.net_InformationUnavailableOnPlatform);
+                }
+            }
+        }
 
-        private static bool GetSupportsMulticast(string name)
+        private static bool? GetSupportsMulticast(string name)
         {
             // /sys/class/net/<interface_name>/flags
             string path = Path.Combine(NetworkFiles.SysClassNetFolder, name, NetworkFiles.FlagsFileName);
-            Interop.LinuxNetDeviceFlags flags = (Interop.LinuxNetDeviceFlags)StringParsingHelpers.ParseRawHexFileAsInt(path);
 
-            return (flags & Interop.LinuxNetDeviceFlags.IFF_MULTICAST) == Interop.LinuxNetDeviceFlags.IFF_MULTICAST;
+            if (File.Exists(path))
+            {
+                try
+                {
+                    Interop.LinuxNetDeviceFlags flags = (Interop.LinuxNetDeviceFlags)StringParsingHelpers.ParseRawHexFileAsInt(path);
+                    return (flags & Interop.LinuxNetDeviceFlags.IFF_MULTICAST) == Interop.LinuxNetDeviceFlags.IFF_MULTICAST;
+                }
+                catch (Exception) // Ignore any problems accessing or parsing the file.
+                {
+                }
+            }
+
+            return null;
         }
 
         public override IPInterfaceProperties GetIPProperties()
@@ -87,6 +164,11 @@ namespace System.Net.NetworkInformation
         public override IPInterfaceStatistics GetIPStatistics()
         {
             return new LinuxIPInterfaceStatistics(_name);
+        }
+
+        public override IPv4InterfaceStatistics GetIPv4Statistics()
+        {
+            return new LinuxIPv4InterfaceStatistics(_name);
         }
 
         public override OperationalStatus OperationalStatus { get { return _operationalStatus; } }
@@ -113,9 +195,12 @@ namespace System.Net.NetworkInformation
             try
             {
                 string path = Path.Combine(NetworkFiles.SysClassNetFolder, name, NetworkFiles.SpeedFileName);
-                return StringParsingHelpers.ParseRawLongFile(path);
+                long megabitsPerSecond = StringParsingHelpers.ParseRawLongFile(path);
+                return megabitsPerSecond == -1
+                    ? megabitsPerSecond
+                    : megabitsPerSecond * 1_000_000; // Value must be returned in bits per second, not megabits.
             }
-            catch (IOException) // Some interfaces may give an "Invalid argument" error when opening this file.
+            catch (Exception) // Ignore any problems accessing or parsing the file.
             {
                 return null;
             }
@@ -125,11 +210,22 @@ namespace System.Net.NetworkInformation
         {
             // /sys/class/net/<name>/operstate
             string path = Path.Combine(NetworkFiles.SysClassNetFolder, name, NetworkFiles.OperstateFileName);
-            string state = File.ReadAllText(path).Trim();
-            return MapState(state);
+            if (File.Exists(path))
+            {
+                try
+                {
+                    string state = File.ReadAllText(path).Trim();
+                    return MapState(state);
+                }
+                catch (Exception) // Ignore any problems accessing or parsing the file.
+                {
+                }
+            }
+
+            return OperationalStatus.Unknown;
         }
 
-        // Maps values from /sys/class/net/<interface>/operstate to OperationStatus values.
+        // Maps values from /sys/class/net/<interface>/operstate to OperationalStatus values.
         private static OperationalStatus MapState(string state)
         {
             //

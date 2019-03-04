@@ -36,6 +36,8 @@ namespace System.Net.Http
             }
         }
 
+        internal void SetVersionWithoutValidation(Version value) => _version = value;
+
         public HttpContent Content
         {
             get { return _content; }
@@ -43,15 +45,15 @@ namespace System.Net.Http
             {
                 CheckDisposed();
 
-                if (HttpEventSource.Log.IsEnabled())
+                if (NetEventSource.IsEnabled)
                 {
                     if (value == null)
                     {
-                        HttpEventSource.ContentNull(this);
+                        NetEventSource.ContentNull(this);
                     }
                     else
                     {
-                        HttpEventSource.Associate(this, value);
+                        NetEventSource.Associate(this, value);
                     }
                 }
 
@@ -73,6 +75,8 @@ namespace System.Net.Http
                 _statusCode = value;
             }
         }
+
+        internal void SetStatusCodeWithoutValidation(HttpStatusCode value) => _statusCode = value;
 
         public string ReasonPhrase
         {
@@ -97,6 +101,8 @@ namespace System.Net.Http
             }
         }
 
+        internal void SetReasonPhraseWithoutValidation(string value) => _reasonPhrase = value;
+
         public HttpResponseHeaders Headers
         {
             get
@@ -115,7 +121,7 @@ namespace System.Net.Http
             set
             {
                 CheckDisposed();
-                if (HttpEventSource.Log.IsEnabled() && (value != null)) HttpEventSource.Associate(this, value);
+                if (value != null) NetEventSource.Associate(this, value);
                 _requestMessage = value;
             }
         }
@@ -132,7 +138,7 @@ namespace System.Net.Http
 
         public HttpResponseMessage(HttpStatusCode statusCode)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Enter(NetEventSource.ComponentType.Http, this, ".ctor", "StatusCode: " + (int)statusCode + ", ReasonPhrase: '" + _reasonPhrase + "'");
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, statusCode);
 
             if (((int)statusCode < 0) || ((int)statusCode > 999))
             {
@@ -142,25 +148,20 @@ namespace System.Net.Http
             _statusCode = statusCode;
             _version = HttpUtilities.DefaultResponseVersion;
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Exit(NetEventSource.ComponentType.Http, this, ".ctor", null);
+            if (NetEventSource.IsEnabled) NetEventSource.Exit(this);
         }
 
         public HttpResponseMessage EnsureSuccessStatusCode()
         {
             if (!IsSuccessStatusCode)
             {
-                // Disposing the content should help users: If users call EnsureSuccessStatusCode(), an exception is
-                // thrown if the response status code is != 2xx. I.e. the behavior is similar to a failed request (e.g.
-                // connection failure). Users don't expect to dispose the content in this case: If an exception is 
-                // thrown, the object is responsible fore cleaning up its state.
-                if (_content != null)
-                {
-                    _content.Dispose();
-                }
-
-                throw new HttpRequestException(string.Format(System.Globalization.CultureInfo.InvariantCulture, SR.net_http_message_not_success_statuscode, (int)_statusCode,
+                throw new HttpRequestException(string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    SR.net_http_message_not_success_statuscode,
+                    (int)_statusCode,
                     ReasonPhrase));
             }
+
             return this;
         }
 
@@ -181,7 +182,7 @@ namespace System.Net.Http
             sb.Append(_content == null ? "<null>" : _content.GetType().ToString());
 
             sb.Append(", Headers:\r\n");
-            sb.Append(HeaderUtilities.DumpHeaders(_headers, _content == null ? null : _content.Headers));
+            HeaderUtilities.DumpHeaders(sb, _headers, _content?.Headers);
 
             return sb.ToString();
         }

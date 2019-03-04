@@ -8,8 +8,9 @@ namespace System.Linq.Parallel.Tests
 {
     internal static class Sources
     {
-        // For outerloop, it's more important to saturate the processors/consumers and fill up buffers.
-        public static readonly int OuterLoopCount = 64 * 1024 * Environment.ProcessorCount;
+        // For outerloop, we use a large count that makes it more likely we'll fill buffers and saturate
+        // producers/consumers, while at the same time being cognizant of total test execution time.
+        public static readonly int OuterLoopCount = 4 * 1024 * Environment.ProcessorCount;
 
         private static readonly IEnumerable<int> OuterLoopCounts = new[] { OuterLoopCount };
 
@@ -43,7 +44,7 @@ namespace System.Linq.Parallel.Tests
             {
                 foreach (T mod in modifiers((int)parms[1]))
                 {
-                    yield return parms.Append(mod).ToArray();
+                    yield return parms.Concat(new object[] { mod }).ToArray();
                 }
             }
         }

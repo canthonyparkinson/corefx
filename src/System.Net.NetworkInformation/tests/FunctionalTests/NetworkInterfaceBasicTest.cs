@@ -27,7 +27,7 @@ namespace System.Net.NetworkInformation.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]  // Not all APIs are supported on Linux and OSX
         public void BasicTest_AccessInstanceProperties_NoExceptions()
         {
             foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
@@ -43,7 +43,8 @@ namespace System.Net.NetworkInformation.Tests
 
                 // Validate NIC speed overflow.
                 // We've found that certain WiFi adapters will return speed of -1 when not connected.
-                Assert.InRange(nic.Speed, nic.OperationalStatus != OperationalStatus.Down ? 0 : -1, long.MaxValue);
+                // We've found that Wi-Fi Direct Virtual Adapters return speed of -1 even when up.
+                Assert.InRange(nic.Speed, -1, long.MaxValue);
 
                 _log.WriteLine("SupportsMulticast: " + nic.SupportsMulticast);
                 _log.WriteLine("GetPhysicalAddress(): " + nic.GetPhysicalAddress());
@@ -51,7 +52,7 @@ namespace System.Net.NetworkInformation.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Linux)]
+        [PlatformSpecific(TestPlatforms.Linux)]  // Some APIs are not supported on Linux
         public void BasicTest_AccessInstanceProperties_NoExceptions_Linux()
         {
             foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
@@ -71,7 +72,7 @@ namespace System.Net.NetworkInformation.Tests
                 try
                 {
                     _log.WriteLine("Speed: " + nic.Speed);
-                    Assert.InRange(nic.Speed, 0, long.MaxValue);
+                    Assert.InRange(nic.Speed, -1, long.MaxValue);
                 }
                 // We cannot guarantee this works on all devices.
                 catch (PlatformNotSupportedException pnse)
@@ -85,8 +86,8 @@ namespace System.Net.NetworkInformation.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.OSX)]
-        public void BasicTest_AccessInstanceProperties_NoExceptions_Osx()
+        [PlatformSpecific(TestPlatforms.OSX|TestPlatforms.FreeBSD)]
+        public void BasicTest_AccessInstanceProperties_NoExceptions_Bsd()
         {
             foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
             {
@@ -105,6 +106,12 @@ namespace System.Net.NetworkInformation.Tests
                 Assert.InRange(nic.Speed, 0, long.MaxValue);
                 _log.WriteLine("SupportsMulticast: " + nic.SupportsMulticast);
                 _log.WriteLine("GetPhysicalAddress(): " + nic.GetPhysicalAddress());
+
+                if (nic.Name.StartsWith("en") || nic.Name == "lo0")
+                {
+                    // Ethernet, WIFI and loopback should have known status.
+                    Assert.True((nic.OperationalStatus == OperationalStatus.Up) || (nic.OperationalStatus == OperationalStatus.Down));
+                }
             }
         }
 
@@ -172,10 +179,9 @@ namespace System.Net.NetworkInformation.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]  // Not all APIs are supported on Linux and OSX
         public void BasicTest_GetIPInterfaceStatistics_Success()
         {
-            // This API is not actually IPv4 specific.
             foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
             {
                 IPInterfaceStatistics stats = nic.GetIPStatistics();
@@ -196,11 +202,10 @@ namespace System.Net.NetworkInformation.Tests
             }
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Linux)]
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsNotWindowsSubsystemForLinux))] // https://github.com/dotnet/corefx/issues/15513 and https://github.com/Microsoft/WSL/issues/3561
+        [PlatformSpecific(TestPlatforms.Linux)]  // Some APIs are not supported on Linux
         public void BasicTest_GetIPInterfaceStatistics_Success_Linux()
         {
-            // This API is not actually IPv4 specific.
             foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
             {
                 IPInterfaceStatistics stats = nic.GetIPStatistics();
@@ -222,10 +227,9 @@ namespace System.Net.NetworkInformation.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.OSX)]
-        public void BasicTest_GetIPInterfaceStatistics_Success_OSX()
+        [PlatformSpecific(TestPlatforms.OSX|TestPlatforms.FreeBSD)]
+        public void BasicTest_GetIPInterfaceStatistics_Success_Bsd()
         {
-            // This API is not actually IPv4 specific.
             foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
             {
                 IPInterfaceStatistics stats = nic.GetIPStatistics();
@@ -246,14 +250,15 @@ namespace System.Net.NetworkInformation.Tests
             }
         }
 
-        [Fact]
+
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsNotWindowsSubsystemForLinux))] // https://github.com/dotnet/corefx/issues/15513 and https://github.com/Microsoft/WSL/issues/3561
         public void BasicTest_GetIsNetworkAvailable_Success()
         {
             Assert.True(NetworkInterface.GetIsNetworkAvailable());
         }
 
         [Theory]
-        [PlatformSpecific(~PlatformID.OSX)]
+        [PlatformSpecific(~(TestPlatforms.OSX|TestPlatforms.FreeBSD))]
         [InlineData(false)]
         [InlineData(true)]
         public async Task NetworkInterface_LoopbackInterfaceIndex_MatchesReceivedPackets(bool ipv6)

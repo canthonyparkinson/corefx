@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Dynamic.Utils;
 using System.Reflection;
 
@@ -13,7 +12,8 @@ namespace System.Linq.Expressions
     /// </summary>
     public sealed class MemberAssignment : MemberBinding
     {
-        private Expression _expression;
+        private readonly Expression _expression;
+
         internal MemberAssignment(MemberInfo member, Expression expression)
 #pragma warning disable 618
             : base(MemberBindingType.Assignment, member)
@@ -21,20 +21,18 @@ namespace System.Linq.Expressions
 #pragma warning restore 618
             _expression = expression;
         }
+
         /// <summary>
         /// Gets the <see cref="Expression"/> which represents the object whose member is being assigned to.
         /// </summary>
-        public Expression Expression
-        {
-            get { return _expression; }
-        }
+        public Expression Expression => _expression;
 
         /// <summary>
         /// Creates a new expression that is like this one, but using the
         /// supplied children. If all of the children are the same, it will
         /// return this expression.
         /// </summary>
-        /// <param name="expression">The <see cref="Expression" /> property of the result.</param>
+        /// <param name="expression">The <see cref="Expression"/> property of the result.</param>
         /// <returns>This expression if no children changed, or an expression with the updated children.</returns>
         public MemberAssignment Update(Expression expression)
         {
@@ -44,8 +42,11 @@ namespace System.Linq.Expressions
             }
             return Expression.Bind(Member, expression);
         }
-    }
 
+        internal override void ValidateAsDefinedHere(int index)
+        {
+        }
+    }
 
     public partial class Expression
     {
@@ -58,7 +59,7 @@ namespace System.Linq.Expressions
         public static MemberAssignment Bind(MemberInfo member, Expression expression)
         {
             ContractUtils.RequiresNotNull(member, nameof(member));
-            RequiresCanRead(expression, nameof(expression));
+            ExpressionUtils.RequiresCanRead(expression, nameof(expression));
             Type memberType;
             ValidateSettableFieldOrPropertyMember(member, out memberType);
             if (!memberType.IsAssignableFrom(expression.Type))
@@ -82,26 +83,33 @@ namespace System.Linq.Expressions
             return Bind(GetProperty(propertyAccessor, nameof(propertyAccessor)), expression);
         }
 
-
         private static void ValidateSettableFieldOrPropertyMember(MemberInfo member, out Type memberType)
         {
-            FieldInfo fi = member as FieldInfo;
-            if (fi == null)
+            Type decType = member.DeclaringType;
+            if (decType == null)
             {
-                PropertyInfo pi = member as PropertyInfo;
-                if (pi == null)
-                {
-                    throw Error.ArgumentMustBeFieldInfoOrPropertyInfo(nameof(member));
-                }
-                if (!pi.CanWrite)
-                {
-                    throw Error.PropertyDoesNotHaveSetter(pi, nameof(member));
-                }
-                memberType = pi.PropertyType;
+                throw Error.NotAMemberOfAnyType(member, nameof(member));
             }
-            else
+
+            // Null paramName as there are two paths here with different parameter names at the API
+            TypeUtils.ValidateType(decType, null);
+            switch (member)
             {
-                memberType = fi.FieldType;
+                case PropertyInfo pi:
+                    if (!pi.CanWrite)
+                    {
+                        throw Error.PropertyDoesNotHaveSetter(pi, nameof(member));
+                    }
+
+                    memberType = pi.PropertyType;
+                    break;
+
+                case FieldInfo fi:
+                    memberType = fi.FieldType;
+                    break;
+
+                default:
+                    throw Error.ArgumentMustBeFieldInfoOrPropertyInfo(nameof(member));
             }
         }
     }

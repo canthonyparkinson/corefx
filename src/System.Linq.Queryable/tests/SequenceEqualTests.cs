@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
 using Xunit;
 
@@ -43,8 +42,8 @@ namespace System.Linq.Tests
         {
             IQueryable<int> first = null;
             int[] second = { };
-            Assert.Throws<ArgumentNullException>("source1", () => first.SequenceEqual(second.AsQueryable()));
-            Assert.Throws<ArgumentNullException>("source1", () => first.SequenceEqual(second.AsQueryable(), null));
+            AssertExtensions.Throws<ArgumentNullException>("source1", () => first.SequenceEqual(second.AsQueryable()));
+            AssertExtensions.Throws<ArgumentNullException>("source1", () => first.SequenceEqual(second.AsQueryable(), null));
         }
 
         [Fact]
@@ -52,8 +51,8 @@ namespace System.Linq.Tests
         {
             int[] first = { };
             IQueryable<int> second = null;
-            Assert.Throws<ArgumentNullException>("source2", () => first.AsQueryable().SequenceEqual(second));
-            Assert.Throws<ArgumentNullException>("source2", () => first.AsQueryable().SequenceEqual(second, null));
+            AssertExtensions.Throws<ArgumentNullException>("source2", () => first.AsQueryable().SequenceEqual(second));
+            AssertExtensions.Throws<ArgumentNullException>("source2", () => first.AsQueryable().SequenceEqual(second, null));
         }
 
         [Fact]

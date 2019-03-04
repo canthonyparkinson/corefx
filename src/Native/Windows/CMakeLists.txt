@@ -5,20 +5,14 @@ SET (CMAKE_C_FLAGS_INIT                     "/W0 /FC")
 SET (CMAKE_C_FLAGS_DEBUG_INIT               "/Od /Zi")
 SET (CMAKE_C_FLAGS_RELEASE_INIT             "/Ox")
 SET (CMAKE_C_FLAGS_RELWITHDEBINFO_INIT      "/O2 /Zi")
-set(CMAKE_ASM_MASM_FLAGS                    "${CMAKE_ASM_MASM_FLAGS} /ZH:SHA_256")
-
-# CXX Compiler flags
-SET (CMAKE_CXX_FLAGS                        "-std=c++11")
-SET (CMAKE_CXX_FLAGS_INIT                   "/W0 /FC")
-SET (CMAKE_CXX_FLAGS_DEBUG_INIT             "/Od /Zi")
-SET (CMAKE_CXX_FLAGS_RELEASE_INIT           "/Ox")
-SET (CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT    "/O2 /Zi")
+SET (CMAKE_ASM_MASM_FLAGS                   "${CMAKE_ASM_MASM_FLAGS} /ZH:SHA_256")
 
 # Configuration of our libray specs and our directories
 SET (CMAKE_INSTALL_PREFIX                   $ENV{__CMakeBinDir})
 SET (CMAKE_INCLUDE_CURRENT_DIR              ON)
 SET (CMAKE_SHARED_LIBRARY_PREFIX            "")
-  
+SET (__LinkArgs $ENV{__LinkArgs})
+
 # Force an out of source build
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
     message(FATAL_ERROR "Binary directory isn't being correctly set before calling Cmake. Tree must be built in separate directory from source.")
@@ -53,17 +47,24 @@ add_compile_options(/ZH:SHA_256) # use SHA256 for generating hashes of compiler 
 if ($ENV{__BuildArch} STREQUAL "x86")
     add_compile_options(/Gz)
 endif ()
-if(NOT $ENV{__BuildArch} STREQUAL "arm64")
-    # enable control-flow-guard support for native components for non-Arm64 builds
-    add_compile_options(/guard:cf) 
-    set(__LinkArgs "${__LinkArgs} /guard:cf")
+
+if (($ENV{__BuildArch} STREQUAL "arm") OR ($ENV{__BuildArch} STREQUAL "arm64"))
+    if(NOT DEFINED CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION OR CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION STREQUAL "" )
+          message(FATAL_ERROR "Windows SDK is required for the ARM32 or ARM64 build.")
+      else()
+          message("Using Windows SDK version ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
+      endif()
 endif ()
+
+# enable control-flow-guard support for native components
+add_compile_options(/guard:cf) 
+set(__LinkArgs "${__LinkArgs} /GUARD:CF")
 
 # Statically linked CRT (libcmt[d].lib, libvcruntime[d].lib and libucrt[d].lib) by default. This is done to avoid
 # linking in VCRUNTIME140.DLL for a simplified xcopy experience by reducing the dependency on VC REDIST.
 #
 # For Release builds, we shall dynamically link into uCRT [ucrtbase.dll] (which is pushed down as a Windows Update on downlevel OS) but
-# wont do the same for debug/checked builds since ucrtbased.dll is not redistributable and Debug/Checked builds are not
+# won't do the same for debug/checked builds since ucrtbased.dll is not redistributable and Debug/Checked builds are not
 # production-time scenarios.
 if (UPPERCASE_CMAKE_BUILD_TYPE STREQUAL "RELEASE")
     add_compile_options(/MT)
@@ -93,16 +94,15 @@ set(__LinkArgs "${__LinkArgs} /PDBCOMPRESS")            #shrink pdb size
 set(__LinkArgs "${__LinkArgs} /DEBUG")
 set(__LinkArgs "${__LinkArgs} /IGNORE:4197,4013,4254,4070,4221")
 
-if (NOT $ENV{__BuildArch} STREQUAL "arm")
-    set(__LinkArgs "${__LinkArgs} /SUBSYSTEM:WINDOWS,6.00") #windows subsystem
-endif()
-
 if (UPPERCASE_CMAKE_BUILD_TYPE STREQUAL "RELEASE")
     # Release build specific flags
     set(__LinkArgs "${__LinkArgs} /LTCG /OPT:REF /OPT:ICF /INCREMENTAL:NO")
     
-    # Force uCRT to be dynamically linked for Release build
-    set(__LinkArgs "${__LinkArgs} /NODEFAULTLIB:libucrt.lib /DEFAULTLIB:ucrt.lib")
+    # Force uCRT to be dynamically linked for Release build (unless env variable CLR_CMAKE_WIN32_FORCE_STATIC_LINK is set to true)
+    set(CLR_CMAKE_WIN32_FORCE_STATIC_LINK $ENV{CLR_CMAKE_WIN32_FORCE_STATIC_LINK})
+    if(NOT CLR_CMAKE_WIN32_FORCE_STATIC_LINK)
+      set(__LinkArgs "${__LinkArgs} /NODEFAULTLIB:libucrt.lib /DEFAULTLIB:ucrt.lib")
+    endif()
     
     if ($ENV{__BuildArch} STREQUAL x86)
         set(__LinkArgs "${__LinkArgs} /SAFESEH")
@@ -110,11 +110,6 @@ if (UPPERCASE_CMAKE_BUILD_TYPE STREQUAL "RELEASE")
 else()
     # Debug build specific flags
     set(__LinkArgs "/NOVCFEATURE ${__LinkArgs}")
-endif()
-
-# Temporary until cmake has VS generators for arm64
-if($ENV{__BuildArch} STREQUAL "arm64")
-    set(__LinkArgs "${__LinkArgs} /machine:arm64")
 endif()
 
 if ($ENV{__BuildArch} STREQUAL "x86_64" OR $ENV{__BuildArch} STREQUAL "amd64")

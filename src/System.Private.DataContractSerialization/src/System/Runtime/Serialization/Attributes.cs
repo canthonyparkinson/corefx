@@ -6,34 +6,15 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Xml;
-using System.Security;
-
 
 namespace System.Runtime.Serialization
 {
     internal class Attributes
     {
-        /// <SecurityNote>
-        /// Critical - Static field used to store the attribute names to read during deserialization.
-        ///            Static fields are marked SecurityCritical or readonly to prevent
-        ///            data from being modified or leaked to other components in appdomain.
-        /// </SecurityNote>
-        [SecurityCritical]
         private static XmlDictionaryString[] s_serializationLocalNames;
 
-        /// <SecurityNote>
-        /// Critical - Static field used to store the attribute names to read during deserialization.
-        ///            Static fields are marked SecurityCritical or readonly to prevent
-        ///            data from being modified or leaked to other components in appdomain.
-        /// </SecurityNote>
-        [SecurityCritical]
         private static XmlDictionaryString[] s_schemaInstanceLocalNames;
 
-        /// <SecurityNote>
-        /// Critical - initializes critical static fields
-        /// Safe - doesn't leak anything
-        /// </SecurityNote>
-        [SecuritySafeCritical]
         static Attributes()
         {
             s_serializationLocalNames = new XmlDictionaryString[]
@@ -43,6 +24,7 @@ namespace System.Runtime.Serialization
                 DictionaryGlobals.RefLocalName,
                 DictionaryGlobals.ClrTypeLocalName,
                 DictionaryGlobals.ClrAssemblyLocalName,
+                DictionaryGlobals.ISerializableFactoryTypeLocalName
             };
 
             s_schemaInstanceLocalNames = new XmlDictionaryString[]
@@ -66,7 +48,6 @@ namespace System.Runtime.Serialization
         internal string FactoryTypePrefix;
         internal bool UnrecognizedAttributesFound;
 
-        [SecuritySafeCritical]
         internal void Read(XmlReaderDelegator reader)
         {
             Reset();

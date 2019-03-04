@@ -1,99 +1,172 @@
-using Xunit;
-using System;
-using System.Reflection;
-using System.Collections.Generic;
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
-#pragma warning disable 0414
+using Xunit;
 
 namespace System.Reflection.Tests
 {
-    public class ExceptionTests
+    public static class ExceptionTests
     {
+        private const int COR_E_AMBIGUOUSMATCH = unchecked((int)0x8000211D);
+        private const int COR_E_INVALIDFILTERCRITERIA = unchecked((int)0x80131601);
+        private const int COR_E_TARGET = unchecked((int)0x80131603);
+        private const int COR_E_TARGETINVOCATION = unchecked((int)0x80131604);
+        private const int COR_E_TARGETPARAMCOUNT = unchecked((int)0x8002000E);
 
+        [Fact]
         public static void TargetException()
         {
-            Exception ex = new TargetException();
-            Assert.NotNull(ex);
-            Assert.Equal(ex.GetType(), typeof(TargetException));
+            TargetException ex = new TargetException();
 
-            string s = "My exception";
-            ex = new TargetException();
-            Assert.NotNull(ex);
-            Assert.Equal(ex.GetType(), typeof(TargetException));
-            Assert.Equal(s, ex.Message);
-
-            s = "My exception";
-            Exception innerException = new Exception();
-            ex = new TargetException(s, innerException);
-            Assert.NotNull(ex);
-            Assert.Equal(ex.GetType(), typeof(TargetException));
-            Assert.Equal(innerException, ex.InnerException);
-            Assert.Equal(s, ex.Message);
-
-            // Throw the exception from a method.
-            try
-            {
-                ThrowTargetException(s, innerException);
-                Assert.True(false);
-            }
-            catch (TargetException tex)
-            {
-                Assert.Equal(innerException, tex.InnerException);
-                Assert.Equal(s, tex.Message);
-            }
-            catch (Exception)
-            {
-                Assert.True(false);
-            }
+            Assert.NotEmpty(ex.Message);
+            Assert.Null(ex.InnerException);
+            Assert.Equal(COR_E_TARGET, ex.HResult);
         }
 
-        private static void ThrowTargetException(string s, Exception innerException)
+        [Fact]
+        public static void TargetException_Message()
         {
-            throw new TargetException(s, innerException);
+            string message = "message";
+            TargetException ex = new TargetException(message);
+
+            Assert.Equal(message, ex.Message);
+            Assert.Null(ex.InnerException);
+            Assert.Equal(COR_E_TARGET, ex.HResult);
         }
 
-        private static void ThrowInvalidFilterCriteriaException(string s, Exception innerException)
+        [Fact]
+        public static void TargetException_Message_InnerException()
         {
-            throw new InvalidFilterCriteriaException(s, innerException);
+            string message = "message";
+            Exception inner = new Exception();
+            TargetException ex = new TargetException(message, inner);
+
+            Assert.Equal(message, ex.Message);
+            Assert.Same(inner, ex.InnerException);
+            Assert.Equal(COR_E_TARGET, ex.HResult);
         }
 
+        [Fact]
+        public static void TargetInvocationException_InnerException()
+        {
+            Exception inner = new Exception();
+            TargetInvocationException ex = new TargetInvocationException(inner);
 
+            Assert.NotEmpty(ex.Message);
+            Assert.Same(inner, ex.InnerException);
+            Assert.Equal(COR_E_TARGETINVOCATION, ex.HResult);
+        }
 
+        [Fact]
+        public static void TargetInvocationException_Message_InnerException()
+        {
+            string message = "message";
+            Exception inner = new Exception();
+            TargetInvocationException ex = new TargetInvocationException(message, inner);
+
+            Assert.Equal(message, ex.Message);
+            Assert.Same(inner, ex.InnerException);
+            Assert.Equal(COR_E_TARGETINVOCATION, ex.HResult);
+        }
+
+        [Fact]
+        public static void TargetParameterCountException()
+        {
+            TargetParameterCountException ex = new TargetParameterCountException();
+
+            Assert.NotEmpty(ex.Message);
+            Assert.Null(ex.InnerException);
+            Assert.Equal(COR_E_TARGETPARAMCOUNT, ex.HResult);
+        }
+
+        [Fact]
+        public static void TargetParameterCountException_Message()
+        {
+            string message = "message";
+            TargetParameterCountException ex = new TargetParameterCountException(message);
+
+            Assert.Equal(message, ex.Message);
+            Assert.Null(ex.InnerException);
+            Assert.Equal(COR_E_TARGETPARAMCOUNT, ex.HResult);
+        }
+
+        [Fact]
+        public static void TargetParameterCountException_Message_InnerException()
+        {
+            string message = "message";
+            Exception inner = new Exception();
+            TargetParameterCountException ex = new TargetParameterCountException(message, inner);
+
+            Assert.Equal(message, ex.Message);
+            Assert.Same(inner, ex.InnerException);
+            Assert.Equal(COR_E_TARGETPARAMCOUNT, ex.HResult);
+        }
+
+        [Fact]
+        public static void AmbiguousMatchException()
+        {
+            AmbiguousMatchException ex = new AmbiguousMatchException();
+
+            Assert.NotEmpty(ex.Message);
+            Assert.Null(ex.InnerException);
+            Assert.Equal(COR_E_AMBIGUOUSMATCH, ex.HResult);
+        }
+
+        [Fact]
+        public static void AmbiguousMatchException_Message()
+        {
+            string message = "message";
+            AmbiguousMatchException ex = new AmbiguousMatchException(message);
+
+            Assert.Equal(message, ex.Message);
+            Assert.Null(ex.InnerException);
+            Assert.Equal(COR_E_AMBIGUOUSMATCH, ex.HResult);
+        }
+
+        [Fact]
+        public static void AmbiguousMatchException_Message_InnerException()
+        {
+            string message = "message";
+            Exception inner = new Exception();
+            AmbiguousMatchException ex = new AmbiguousMatchException(message, inner);
+
+            Assert.Equal(message, ex.Message);
+            Assert.Same(inner, ex.InnerException);
+            Assert.Equal(COR_E_AMBIGUOUSMATCH, ex.HResult);
+        }
+
+        [Fact]
         public static void InvalidFilterCriteriaException()
         {
-            Exception ex = new InvalidFilterCriteriaException();
-            Assert.NotNull(ex);
-            Assert.Equal(ex.GetType(), typeof(InvalidFilterCriteriaException));
+            InvalidFilterCriteriaException ex = new InvalidFilterCriteriaException();
 
-            string s = "My exception";
-            ex = new InvalidFilterCriteriaException();
-            Assert.NotNull(ex);
-            Assert.Equal(ex.GetType(), typeof(InvalidFilterCriteriaException));
-            Assert.Equal(s, ex.Message);
+            Assert.NotEmpty(ex.Message);
+            Assert.Null(ex.InnerException);
+            Assert.Equal(COR_E_INVALIDFILTERCRITERIA, ex.HResult);
+        }
 
-            s = "My exception";
-            Exception innerException = new Exception();
-            ex = new InvalidFilterCriteriaException(s, innerException);
-            Assert.NotNull(ex);
-            Assert.Equal(ex.GetType(), typeof(InvalidFilterCriteriaException));
-            Assert.Equal(innerException, ex.InnerException);
-            Assert.Equal(s, ex.Message);
+        [Fact]
+        public static void InvalidFilterCriteriaException_Message()
+        {
+            string message = "message";
+            InvalidFilterCriteriaException ex = new InvalidFilterCriteriaException(message);
 
-            // Throw the exception from a method.
-            try
-            {
-                ThrowInvalidFilterCriteriaException(s, innerException);
-                Assert.True(false);
-            }
-            catch (InvalidFilterCriteriaException tex)
-            {
-                Assert.Equal(innerException, tex.InnerException);
-                Assert.Equal(s, tex.Message);
-            }
-            catch (Exception)
-            {
-                Assert.True(false);
-            }
+            Assert.Equal(message, ex.Message);
+            Assert.Null(ex.InnerException);
+            Assert.Equal(COR_E_INVALIDFILTERCRITERIA, ex.HResult);
+        }
+
+        [Fact]
+        public static void InvalidFilterCriteriaException_Message_InnerException()
+        {
+            string message = "message";
+            Exception inner = new Exception();
+            InvalidFilterCriteriaException ex = new InvalidFilterCriteriaException(message, inner);
+
+            Assert.Equal(message, ex.Message);
+            Assert.Same(inner, ex.InnerException);
+            Assert.Equal(COR_E_INVALIDFILTERCRITERIA, ex.HResult);
         }
     }
 }

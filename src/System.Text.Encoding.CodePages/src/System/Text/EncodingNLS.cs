@@ -3,11 +3,11 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-using System.Diagnostics.Contracts;
 using System.Collections;
 using System.Globalization;
 using System.Resources;
 using System.Threading;
+using System.Runtime.Serialization;
 
 namespace System.Text
 {
@@ -20,7 +20,6 @@ namespace System.Text
     // encodings.
     // So if you change the wrappers in this class, you must change the wrappers in the other classes
     // as well because they should have the same behavior.
-    //
     internal abstract class EncodingNLS : Encoding
     {
         private string _encodingName;
@@ -46,7 +45,6 @@ namespace System.Text
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others. 
         // parent method is safe
-        [System.Security.SecuritySafeCritical] // overrides public transparent member
         public override unsafe int GetByteCount(char[] chars, int index, int count)
         {
             // Validate input parameters
@@ -54,31 +52,28 @@ namespace System.Text
                 throw new ArgumentNullException(nameof(chars), SR.ArgumentNull_Array);
 
             if (index < 0 || count < 0)
-                throw new ArgumentOutOfRangeException((index < 0 ? "index" : "count"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((index < 0 ? nameof(index): nameof(count)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (chars.Length - index < count)
                 throw new ArgumentOutOfRangeException(nameof(chars), SR.ArgumentOutOfRange_IndexCountBuffer);
-            Contract.EndContractBlock();
 
             // If no input, return 0, avoid fixed empty array problem
             if (chars.Length == 0)
                 return 0;
 
             // Just call the pointer version
-            fixed (char* pChars = chars)
+            fixed (char* pChars = &chars[0])
                 return GetByteCount(pChars + index, count, null);
         }
 
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others. 
         // parent method is safe
-        [System.Security.SecuritySafeCritical] // overrides public transparent member
-        public override unsafe int GetByteCount(String s)
+        public override unsafe int GetByteCount(string s)
         {
             // Validate input
             if (s == null)
                 throw new ArgumentNullException(nameof(s));
-            Contract.EndContractBlock();
 
             fixed (char* pChars = s)
                 return GetByteCount(pChars, s.Length, null);
@@ -86,7 +81,6 @@ namespace System.Text
 
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others.
-        [System.Security.SecurityCritical]  // auto-generated
         public override unsafe int GetByteCount(char* chars, int count)
         {
             // Validate Parameters
@@ -95,7 +89,6 @@ namespace System.Text
 
             if (count < 0)
                 throw new ArgumentOutOfRangeException(nameof(count), SR.ArgumentOutOfRange_NeedNonNegNum);
-            Contract.EndContractBlock();
 
             // Call it with empty encoder
             return GetByteCount(chars, count, null);
@@ -105,22 +98,20 @@ namespace System.Text
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others.
 
-        [System.Security.SecuritySafeCritical] // overrides public transparent member
-        public override unsafe int GetBytes(String s, int charIndex, int charCount,
+        public override unsafe int GetBytes(string s, int charIndex, int charCount,
                                               byte[] bytes, int byteIndex)
         {
             if (s == null || bytes == null)
-                throw new ArgumentNullException((s == null ? "s" : "bytes"), SR.ArgumentNull_Array);
+                throw new ArgumentNullException((s == null ? nameof(s): nameof(bytes)), SR.ArgumentNull_Array);
 
             if (charIndex < 0 || charCount < 0)
-                throw new ArgumentOutOfRangeException((charIndex < 0 ? "charIndex" : "charCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((charIndex < 0 ? nameof(charIndex): nameof(charCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (s.Length - charIndex < charCount)
                 throw new ArgumentOutOfRangeException(nameof(s), SR.ArgumentOutOfRange_IndexCount);
 
             if (byteIndex < 0 || byteIndex > bytes.Length)
                 throw new ArgumentOutOfRangeException(nameof(byteIndex), SR.ArgumentOutOfRange_Index);
-            Contract.EndContractBlock();
 
             int byteCount = bytes.Length - byteIndex;
 
@@ -129,7 +120,7 @@ namespace System.Text
                 bytes = new byte[1];
 
             fixed (char* pChars = s)
-                fixed (byte* pBytes = bytes)
+                fixed (byte* pBytes = &bytes[0])
                     return GetBytes(pChars + charIndex, charCount,
                                     pBytes + byteIndex, byteCount, null);
         }
@@ -146,23 +137,21 @@ namespace System.Text
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others.  
         // parent method is safe
-        [System.Security.SecuritySafeCritical] // overrides public transparent member
         public override unsafe int GetBytes(char[] chars, int charIndex, int charCount,
                                                byte[] bytes, int byteIndex)
         {
             // Validate parameters
             if (chars == null || bytes == null)
-                throw new ArgumentNullException((chars == null ? "chars" : "bytes"), SR.ArgumentNull_Array);
+                throw new ArgumentNullException((chars == null ? nameof(chars): nameof(bytes)), SR.ArgumentNull_Array);
 
             if (charIndex < 0 || charCount < 0)
-                throw new ArgumentOutOfRangeException((charIndex < 0 ? "charIndex" : "charCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((charIndex < 0 ? nameof(charIndex): nameof(charCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (chars.Length - charIndex < charCount)
                 throw new ArgumentOutOfRangeException(nameof(chars), SR.ArgumentOutOfRange_IndexCountBuffer);
 
             if (byteIndex < 0 || byteIndex > bytes.Length)
                 throw new ArgumentOutOfRangeException(nameof(byteIndex), SR.ArgumentOutOfRange_Index);
-            Contract.EndContractBlock();
 
             // If nothing to encode return 0, avoid fixed problem
             if (chars.Length == 0)
@@ -175,8 +164,8 @@ namespace System.Text
             if (bytes.Length == 0)
                 bytes = new byte[1];
 
-            fixed (char* pChars = chars)
-                fixed (byte* pBytes = bytes)
+            fixed (char* pChars = &chars[0])
+                fixed (byte* pBytes = &bytes[0])
                     // Remember that byteCount is # to decode, not size of array.
                     return GetBytes(pChars + charIndex, charCount,
                                     pBytes + byteIndex, byteCount, null);
@@ -184,16 +173,14 @@ namespace System.Text
 
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others. 
-        [System.Security.SecurityCritical]  // auto-generated
         public override unsafe int GetBytes(char* chars, int charCount, byte* bytes, int byteCount)
         {
             // Validate Parameters
             if (bytes == null || chars == null)
-                throw new ArgumentNullException(bytes == null ? "bytes" : "chars", SR.ArgumentNull_Array);
+                throw new ArgumentNullException(bytes == null ? nameof(bytes): nameof(chars), SR.ArgumentNull_Array);
 
             if (charCount < 0 || byteCount < 0)
-                throw new ArgumentOutOfRangeException((charCount < 0 ? "charCount" : "byteCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
-            Contract.EndContractBlock();
+                throw new ArgumentOutOfRangeException((charCount < 0 ? nameof(charCount): nameof(byteCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             return GetBytes(chars, charCount, bytes, byteCount, null);
         }
@@ -204,7 +191,6 @@ namespace System.Text
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others.  
         // parent method is safe
-        [System.Security.SecuritySafeCritical] // overrides public transparent member
         public override unsafe int GetCharCount(byte[] bytes, int index, int count)
         {
             // Validate Parameters
@@ -212,24 +198,22 @@ namespace System.Text
                 throw new ArgumentNullException(nameof(bytes), SR.ArgumentNull_Array);
 
             if (index < 0 || count < 0)
-                throw new ArgumentOutOfRangeException((index < 0 ? "index" : "count"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((index < 0 ? nameof(index): nameof(count)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (bytes.Length - index < count)
                 throw new ArgumentOutOfRangeException(nameof(bytes), SR.ArgumentOutOfRange_IndexCountBuffer);
-            Contract.EndContractBlock();
 
             // If no input just return 0, fixed doesn't like 0 length arrays
             if (bytes.Length == 0)
                 return 0;
 
             // Just call pointer version
-            fixed (byte* pBytes = bytes)
+            fixed (byte* pBytes = &bytes[0])
                 return GetCharCount(pBytes + index, count, null);
         }
 
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others.  
-        [System.Security.SecurityCritical]  // auto-generated
         public override unsafe int GetCharCount(byte* bytes, int count)
         {
             // Validate Parameters
@@ -238,7 +222,6 @@ namespace System.Text
 
             if (count < 0)
                 throw new ArgumentOutOfRangeException(nameof(count), SR.ArgumentOutOfRange_NeedNonNegNum);
-            Contract.EndContractBlock();
 
             return GetCharCount(bytes, count, null);
         }
@@ -246,23 +229,21 @@ namespace System.Text
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others.  
         // parent method is safe
-        [System.Security.SecuritySafeCritical] // overrides public transparent member
         public override unsafe int GetChars(byte[] bytes, int byteIndex, int byteCount,
                                               char[] chars, int charIndex)
         {
             // Validate Parameters
             if (bytes == null || chars == null)
-                throw new ArgumentNullException(bytes == null ? "bytes" : "chars", SR.ArgumentNull_Array);
+                throw new ArgumentNullException(bytes == null ? nameof(bytes): nameof(chars), SR.ArgumentNull_Array);
 
             if (byteIndex < 0 || byteCount < 0)
-                throw new ArgumentOutOfRangeException((byteIndex < 0 ? "byteIndex" : "byteCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((byteIndex < 0 ? nameof(byteIndex): nameof(byteCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (bytes.Length - byteIndex < byteCount)
                 throw new ArgumentOutOfRangeException(nameof(bytes), SR.ArgumentOutOfRange_IndexCountBuffer);
 
             if (charIndex < 0 || charIndex > chars.Length)
                 throw new ArgumentOutOfRangeException(nameof(charIndex), SR.ArgumentOutOfRange_Index);
-            Contract.EndContractBlock();
 
             // If no input, return 0 & avoid fixed problem
             if (bytes.Length == 0)
@@ -275,8 +256,8 @@ namespace System.Text
             if (chars.Length == 0)
                 chars = new char[1];
 
-            fixed (byte* pBytes = bytes)
-                fixed (char* pChars = chars)
+            fixed (byte* pBytes = &bytes[0])
+                fixed (char* pChars = &chars[0])
                     // Remember that charCount is # to decode, not size of array
                     return GetChars(pBytes + byteIndex, byteCount,
                                     pChars + charIndex, charCount, null);
@@ -284,16 +265,14 @@ namespace System.Text
 
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others.  
-        [System.Security.SecurityCritical]  // auto-generated
         public unsafe override int GetChars(byte* bytes, int byteCount, char* chars, int charCount)
         {
             // Validate Parameters
             if (bytes == null || chars == null)
-                throw new ArgumentNullException(bytes == null ? "bytes" : "chars", SR.ArgumentNull_Array);
+                throw new ArgumentNullException(bytes == null ? nameof(bytes): nameof(chars), SR.ArgumentNull_Array);
 
             if (charCount < 0 || byteCount < 0)
-                throw new ArgumentOutOfRangeException((charCount < 0 ? "charCount" : "byteCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
-            Contract.EndContractBlock();
+                throw new ArgumentOutOfRangeException((charCount < 0 ? nameof(charCount): nameof(byteCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             return GetChars(bytes, byteCount, chars, charCount, null);
         }
@@ -304,24 +283,22 @@ namespace System.Text
         // All of our public Encodings that don't use EncodingNLS must have this (including EncodingNLS)
         // So if you fix this, fix the others.
         // parent method is safe
-        [System.Security.SecuritySafeCritical] // overrides public transparent member
-        public override unsafe String GetString(byte[] bytes, int index, int count)
+        public override unsafe string GetString(byte[] bytes, int index, int count)
         {
             // Validate Parameters
             if (bytes == null)
                 throw new ArgumentNullException(nameof(bytes), SR.ArgumentNull_Array);
 
             if (index < 0 || count < 0)
-                throw new ArgumentOutOfRangeException((index < 0 ? "index" : "count"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((index < 0 ? nameof(index): nameof(count)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (bytes.Length - index < count)
                 throw new ArgumentOutOfRangeException(nameof(bytes), SR.ArgumentOutOfRange_IndexCountBuffer);
-            Contract.EndContractBlock();
 
             // Avoid problems with empty input buffer
-            if (bytes.Length == 0) return String.Empty;
+            if (bytes.Length == 0) return string.Empty;
 
-            fixed (byte* pBytes = bytes)
+            fixed (byte* pBytes = &bytes[0])
                 return GetString(pBytes + index, count);
         }
 
@@ -380,7 +357,7 @@ namespace System.Text
             throw new ArgumentException(SR.Format(SR.Argument_EncodingConversionOverflowChars, EncodingName, DecoderFallback.GetType()), "chars");
         }
 
-        public override String EncodingName
+        public override string EncodingName
         {
             get
             {
@@ -562,7 +539,7 @@ namespace System.Text
         }
 
         // Returns the IANA preferred name for this encoding
-        public override String WebName
+        public override string WebName
         {
             get
             {

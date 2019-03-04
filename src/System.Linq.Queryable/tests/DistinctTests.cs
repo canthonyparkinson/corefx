@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
 using Xunit;
 
@@ -56,14 +55,14 @@ namespace System.Linq.Tests
         public void NullSource()
         {
             IQueryable<string> source = null;
-            Assert.Throws<ArgumentNullException>("source", () => source.Distinct());
+            AssertExtensions.Throws<ArgumentNullException>("source", () => source.Distinct());
         }
 
         [Fact]
         public void NullSourceCustomComparer()
         {
             IQueryable<string> source = null;
-            Assert.Throws<ArgumentNullException>("source", () => source.Distinct(StringComparer.Ordinal));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => source.Distinct(StringComparer.Ordinal));
         }
 
         [Fact]

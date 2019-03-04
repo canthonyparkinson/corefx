@@ -7,13 +7,13 @@ using System.Globalization;
 namespace System.ComponentModel
 {
     /// <summary>
-    /// <para>Provides a type converter to convert <see cref='System.Array'/>
-    /// objects to and from various other representations.</para>
+    /// Provides a type converter to convert <see cref='System.Array'/>
+    /// objects to and from various other representations.
     /// </summary>
     public class ArrayConverter : CollectionConverter
     {
         /// <summary>
-        ///    <para>Converts the given value object to the specified destination type.</para>
+        /// Converts the given value object to the specified destination type.
         /// </summary>
         public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
         {
@@ -30,9 +30,8 @@ namespace System.ComponentModel
             return base.ConvertTo(context, culture, value, destinationType);
         }
 
-#if !NETSTANDARD10
         /// <summary>
-        ///    <para>Gets a collection of properties for the type of array specified by the value parameter.</para>
+        /// Gets a collection of properties for the type of array specified by the value parameter.
         /// </summary>
         public override PropertyDescriptorCollection GetProperties(ITypeDescriptorContext context, object value, Attribute[] attributes)
         {
@@ -60,17 +59,12 @@ namespace System.ComponentModel
 
             return new PropertyDescriptorCollection(props);
         }
-#endif // !NETSTANDARD10
 
         /// <summary>
-        ///    <para>Gets a value indicating whether this object supports properties.</para>
+        /// Gets a value indicating whether this object supports properties.
         /// </summary>
-        public override bool GetPropertiesSupported(ITypeDescriptorContext context)
-        {
-            return true;
-        }
+        public override bool GetPropertiesSupported(ITypeDescriptorContext context) => true;
 
-#if !NETSTANDARD10
         private class ArrayPropertyDescriptor : SimplePropertyDescriptor
         {
             private readonly int _index;
@@ -83,8 +77,7 @@ namespace System.ComponentModel
 
             public override object GetValue(object instance)
             {
-                var array = instance as Array;
-                if (array != null && array.GetLength(0) > _index)
+                if (instance is Array array && array.GetLength(0) > _index)
                 {
                     return array.GetValue(_index);
                 }
@@ -94,9 +87,8 @@ namespace System.ComponentModel
 
             public override void SetValue(object instance, object value)
             {
-                if (instance is Array)
+                if (instance is Array array)
                 {
-                    Array array = (Array)instance;
                     if (array.GetLength(0) > _index)
                     {
                         array.SetValue(value, _index);
@@ -106,6 +98,5 @@ namespace System.ComponentModel
                 }
             }
         }
-#endif // !NETSTANDARD10
     }
 }

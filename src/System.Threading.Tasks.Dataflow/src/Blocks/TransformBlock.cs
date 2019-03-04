@@ -97,7 +97,7 @@ namespace System.Threading.Tasks.Dataflow
             if (transformSync == null && transformAsync == null) throw new ArgumentNullException("transform");
             if (dataflowBlockOptions == null) throw new ArgumentNullException(nameof(dataflowBlockOptions));
 
-            Contract.Requires(transformSync == null ^ transformAsync == null, "Exactly one of transformSync and transformAsync must be null.");
+            Debug.Assert(transformSync == null ^ transformAsync == null, "Exactly one of transformSync and transformAsync must be null.");
             Contract.EndContractBlock();
 
             // Ensure we have options that can't be changed by the caller
@@ -228,7 +228,7 @@ namespace System.Threading.Tasks.Dataflow
         [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         private void ProcessMessageWithTask(Func<TInput, Task<TOutput>> transform, KeyValuePair<TInput, long> messageWithId)
         {
-            Contract.Requires(transform != null, "Function to invoke is required.");
+            Debug.Assert(transform != null, "Function to invoke is required.");
 
             // Run the transform function to get the task that represents the operation's completion
             Task<TOutput> task = null;
@@ -273,8 +273,8 @@ namespace System.Threading.Tasks.Dataflow
         /// <param name="messageWithId">The originating message</param>
         private void AsyncCompleteProcessMessageWithTask(Task<TOutput> completed, KeyValuePair<TInput, long> messageWithId)
         {
-            Contract.Requires(completed != null, "Completed task is required.");
-            Contract.Requires(completed.IsCompleted, "Task must be completed to be here.");
+            Debug.Assert(completed != null, "Completed task is required.");
+            Debug.Assert(completed.IsCompleted, "Task must be completed to be here.");
 
             bool isBounded = _target.IsBounded;
             bool gotOutputItem = false;
@@ -351,7 +351,7 @@ namespace System.Threading.Tasks.Dataflow
         }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="TryReceive"]/*' />
-        public Boolean TryReceive(Predicate<TOutput> filter, out TOutput item)
+        public bool TryReceive(Predicate<TOutput> filter, out TOutput item)
         {
             return _source.TryReceive(filter, out item);
         }
@@ -369,13 +369,13 @@ namespace System.Threading.Tasks.Dataflow
         public int OutputCount { get { return _source.OutputCount; } }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Targets/Member[@name="OfferMessage"]/*' />
-        DataflowMessageStatus ITargetBlock<TInput>.OfferMessage(DataflowMessageHeader messageHeader, TInput messageValue, ISourceBlock<TInput> source, Boolean consumeToAccept)
+        DataflowMessageStatus ITargetBlock<TInput>.OfferMessage(DataflowMessageHeader messageHeader, TInput messageValue, ISourceBlock<TInput> source, bool consumeToAccept)
         {
             return _target.OfferMessage(messageHeader, messageValue, source, consumeToAccept);
         }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="ConsumeMessage"]/*' />
-        TOutput ISourceBlock<TOutput>.ConsumeMessage(DataflowMessageHeader messageHeader, ITargetBlock<TOutput> target, out Boolean messageConsumed)
+        TOutput ISourceBlock<TOutput>.ConsumeMessage(DataflowMessageHeader messageHeader, ITargetBlock<TOutput> target, out bool messageConsumed)
         {
             return _source.ConsumeMessage(messageHeader, target, out messageConsumed);
         }
@@ -429,7 +429,7 @@ namespace System.Threading.Tasks.Dataflow
             /// <param name="transformBlock">The transform being viewed.</param>
             public DebugView(TransformBlock<TInput, TOutput> transformBlock)
             {
-                Contract.Requires(transformBlock != null, "Need a block with which to construct the debug view.");
+                Debug.Assert(transformBlock != null, "Need a block with which to construct the debug view.");
                 _transformBlock = transformBlock;
                 _targetDebuggingInformation = transformBlock._target.GetDebuggingInformation();
                 _sourceDebuggingInformation = transformBlock._source.GetDebuggingInformation();
@@ -443,7 +443,7 @@ namespace System.Threading.Tasks.Dataflow
             public IEnumerable<TOutput> OutputQueue { get { return _sourceDebuggingInformation.OutputQueue; } }
 
             /// <summary>Gets the number of outstanding input operations.</summary>
-            public Int32 CurrentDegreeOfParallelism { get { return _targetDebuggingInformation.CurrentDegreeOfParallelism; } }
+            public int CurrentDegreeOfParallelism { get { return _targetDebuggingInformation.CurrentDegreeOfParallelism; } }
             /// <summary>Gets the task being used for output processing.</summary>
             public Task TaskForOutputProcessing { get { return _sourceDebuggingInformation.TaskForOutputProcessing; } }
 

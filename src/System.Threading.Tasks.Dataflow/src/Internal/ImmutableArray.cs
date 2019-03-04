@@ -12,7 +12,6 @@
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Diagnostics;
 
 namespace System.Threading.Tasks.Dataflow.Internal
@@ -24,10 +23,10 @@ namespace System.Threading.Tasks.Dataflow.Internal
     /// <summary>Provides a simple, immutable array.</summary>
     /// <typeparam name="T">Specifies the type of the data stored in the array.</typeparam>
     [DebuggerDisplay("Count={Count}")]
-    internal struct ImmutableArray<T>
+    internal readonly struct ImmutableArray<T>
     {
         /// <summary>An empty array.</summary>
-        private readonly static ImmutableArray<T> s_empty = new ImmutableArray<T>(new T[0]);
+        private static readonly ImmutableArray<T> s_empty = new ImmutableArray<T>(new T[0]);
         /// <summary>The immutable data in this array instance.</summary>
         private readonly T[] _array;
 
@@ -38,7 +37,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         /// <param name="elements">The element array to use for this array's data.</param>
         private ImmutableArray(T[] elements)
         {
-            Contract.Requires(elements != null, "Requires an array to wrap.");
+            Debug.Assert(elements != null, "Requires an array to wrap.");
             _array = elements;
         }
 

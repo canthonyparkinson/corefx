@@ -15,12 +15,8 @@ namespace System.Net.Sockets
 
         internal SocketException(SocketError errorCode, uint platformError) : base((int)platformError)
         {
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, errorCode, platformError);
             _errorCode = errorCode;
-
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print($"SocketException::.ctor(SocketError={errorCode}, uint={platformError}):{Message}");
-            }
         }
 
         private SocketException(Interop.ErrorInfo error) : this(SocketErrorPal.GetSocketErrorForNativeError(error.Error), (uint)error.RawErrno)
@@ -29,9 +25,19 @@ namespace System.Net.Sockets
 
         private static int GetNativeErrorForSocketError(SocketError error)
         {
-            return error != SocketError.SocketError ?
-                SocketErrorPal.GetNativeErrorForSocketError(error).Info().RawErrno :
-                (int)error;
+            int nativeErr = (int)error;
+            if (error != SocketError.SocketError)
+            {
+                Interop.Error interopErr;
+
+                // If an interop error was not found, then don't invoke Info().RawErrno as that will fail with assert.
+                if (SocketErrorPal.TryGetNativeErrorForSocketError(error, out interopErr))
+                {
+                    nativeErr = interopErr.Info().RawErrno;
+                }
+            }
+
+            return nativeErr;
         }
     }
 }

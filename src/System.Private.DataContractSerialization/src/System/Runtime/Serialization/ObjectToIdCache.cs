@@ -5,8 +5,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Security;
-
 
 namespace System.Runtime.Serialization
 {
@@ -14,14 +12,14 @@ namespace System.Runtime.Serialization
     {
         internal int m_currentCount;
         internal int[] m_ids;
-        internal Object[] m_objs;
+        internal object[] m_objs;
         internal bool[] m_isWrapped;
 
         public ObjectToIdCache()
         {
             m_currentCount = 1;
             m_ids = new int[GetPrime(1)];
-            m_objs = new Object[m_ids.Length];
+            m_objs = new object[m_ids.Length];
             m_isWrapped = new bool[m_ids.Length];
         }
 
@@ -145,7 +143,7 @@ namespace System.Runtime.Serialization
             int[] oldIds = m_ids;
             object[] oldObjs = m_objs;
             m_ids = new int[size];
-            m_objs = new Object[size];
+            m_objs = new object[size];
             m_isWrapped = new bool[size];
 
             for (int j = 0; j < oldObjs.Length; j++)
@@ -173,11 +171,6 @@ namespace System.Runtime.Serialization
             return min;
         }
 
-
-        /// <SecurityNote>
-        /// Review - Static fields are marked SecurityCritical or readonly to prevent
-        ///          data from being modified or leaked to other components in appdomain.
-        /// </SecurityNote>
         internal static readonly int[] primes =
         {
             3, 7, 17, 37, 89, 197, 431, 919, 1931, 4049, 8419, 17519, 36353,

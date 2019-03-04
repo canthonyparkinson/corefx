@@ -25,10 +25,22 @@ namespace System.Diagnostics
     ///   
     ///   This EventSource defines a EventSource argument called 'FilterAndPayloadSpecs' that defines
     ///   what DiagnsoticSources to enable and what parts of the payload to serialize into the key-value
-    ///   list that will be forwarded to the EventSource.    If it is empty, all serializable parts of
-    ///   every DiagnosticSource event will be forwarded (this is NOT recommended for monitoring but 
-    ///   can be useful for discovery).
+    ///   list that will be forwarded to the EventSource.    If it is empty, values of properties of the 
+    ///   diagnostic source payload are dumped as strings (using ToString()) and forwarded to the EventSource.  
+    ///   For what people think of as serializable object strings, primitives this gives you want you want. 
+    ///   (the value of the property in string form) for what people think of as non-serializable objects 
+    ///   (e.g. HttpContext) the ToString() method is typically not defined, so you get the Object.ToString() 
+    ///   implementation that prints the type name.  This is useful since this is the information you need 
+    ///   (the type of the property) to discover the field names so you can create a transform specification
+    ///   that will pick off the properties you desire.  
     ///   
+    ///   Once you have the particular values you desire, the implicit payload elements are typically not needed
+    ///   anymore and you can prefix the Transform specification with a '-' which suppresses the implicit 
+    ///   transform (you only get the values of the properties you specifically ask for.  
+    /// 
+    ///   Logically a transform specification is simply a fetching specification X.Y.Z along with a name to give
+    ///   it in the output (which defaults to the last name in the fetch specification).  
+    /// 
     ///   The FilterAndPayloadSpecs is one long string with the following structures
     ///   
     ///   * It is a newline separated list of FILTER_AND_PAYLOAD_SPEC
@@ -84,7 +96,7 @@ namespace System.Diagnostics
     /// 
     /// * How data is logged in the EventSource 
     /// 
-    /// By default all data from Diagnostic sources is logged to the the DiagnosticEventSouce event called 'Event' 
+    /// By default all data from DiagnosticSources is logged to the DiagnosticEventSouce event called 'Event' 
     /// which has three fields  
     /// 
     ///     string SourceName, 
@@ -112,9 +124,9 @@ namespace System.Diagnostics
     ///     "MyDiagnosticSource/SecurityStart@Activity2Start\r\n" + 
     ///     "MyDiagnosticSource/SecurityStop@Activity2Stop\r\n" 
     /// 
-    /// Defines that RequestStart will be logged with the EventSource Event Activity1Start (and the cooresponding stop) which
-    /// means that all events caused between these two markers will have an activity ID assocatied with this start event.  
-    /// Simmilarly SecurityStart is mapped to Activity2Start.    
+    /// Defines that RequestStart will be logged with the EventSource Event Activity1Start (and the corresponding stop) which
+    /// means that all events caused between these two markers will have an activity ID associated with this start event.  
+    /// Similarly SecurityStart is mapped to Activity2Start.    
     /// 
     /// Note you can map many DiangosticSource events to the same EventSource Event (e.g. Activity1Start).  As long as the
     /// activities don't nest, you can reuse the same event name (since the payloads have the DiagnosticSource name which can
@@ -137,12 +149,46 @@ namespace System.Diagnostics
             /// <summary>
             /// Indicates diagnostics messages from DiagnosticSourceEventSource should be included. 
             /// </summary>
-            public const EventKeywords Messages = (EventKeywords)1;
+            public const EventKeywords Messages = (EventKeywords)0x1;
             /// <summary>
             /// Indicates that all events from all diagnostic sources should be forwarded to the EventSource using the 'Event' event.  
             /// </summary>
-            public const EventKeywords Events = (EventKeywords)2;
+            public const EventKeywords Events = (EventKeywords)0x2;
+
+            // Some ETW logic does not support passing arguments to the EventProvider.   To get around
+            // this in common cases, we define some keywords that basically stand in for particular common argumnents
+            // That way at least the common cases can be used by everyone (and it also compresses things).
+            // We start these keywords at 0x1000.   See below for the values these keywords represent
+            // Because we want all keywords on to still mean 'dump everything by default' we have another keyword
+            // IgnoreShorcutKeywords which must be OFF in order for the shortcuts to work thus the all 1s keyword
+            // still means what you expect.   
+            public const EventKeywords IgnoreShortCutKeywords = (EventKeywords)0x0800;
+            public const EventKeywords AspNetCoreHosting = (EventKeywords)0x1000;
+            public const EventKeywords EntityFrameworkCoreCommands = (EventKeywords)0x2000;
         };
+
+        // Setting AspNetCoreHosting is like having this in the FilterAndPayloadSpecs string
+        // It turns on basic hostig events. 
+        private readonly string AspNetCoreHostingKeywordValue =
+            "Microsoft.AspNetCore/Microsoft.AspNetCore.Hosting.BeginRequest@Activity1Start:-" +
+                "httpContext.Request.Method;" +
+                "httpContext.Request.Host;" +
+                "httpContext.Request.Path;" +
+                "httpContext.Request.QueryString" +
+            "\n" +
+            "Microsoft.AspNetCore/Microsoft.AspNetCore.Hosting.EndRequest@Activity1Stop:-" +
+                "httpContext.TraceIdentifier;" +
+                "httpContext.Response.StatusCode";
+
+        // Setting EntityFrameworkCoreCommands is like having this in the FilterAndPayloadSpecs string
+        // It turns on basic SQL commands.
+        private readonly string EntityFrameworkCoreCommandsKeywordValue =
+            "Microsoft.EntityFrameworkCore/Microsoft.EntityFrameworkCore.BeforeExecuteCommand@Activity2Start:-" +
+                "Command.Connection.DataSource;" +
+                "Command.Connection.Database;" +
+                "Command.CommandText" +
+            "\n" +
+            "Microsoft.EntityFrameworkCore/Microsoft.EntityFrameworkCore.AfterExecuteCommand@Activity2Stop:-";
 
         /// <summary>
         /// Used to send ad-hoc diagnostics to humans.   
@@ -309,6 +355,14 @@ namespace System.Diagnostics
                 {
                     string filterAndPayloadSpecs;
                     command.Arguments.TryGetValue("FilterAndPayloadSpecs", out filterAndPayloadSpecs);
+
+                    if (!IsEnabled(EventLevel.Informational, Keywords.IgnoreShortCutKeywords))
+                    {
+                        if (IsEnabled(EventLevel.Informational, Keywords.AspNetCoreHosting))
+                            filterAndPayloadSpecs = NewLineSeparate(filterAndPayloadSpecs, AspNetCoreHostingKeywordValue);
+                        if (IsEnabled(EventLevel.Informational, Keywords.EntityFrameworkCoreCommands))
+                            filterAndPayloadSpecs = NewLineSeparate(filterAndPayloadSpecs, EntityFrameworkCoreCommandsKeywordValue);
+                    }
                     FilterAndTransform.CreateFilterAndTransformList(ref _specs, filterAndPayloadSpecs, this);
                 }
                 else if (command.Command == EventCommand.Update || command.Command == EventCommand.Disable)
@@ -316,6 +370,15 @@ namespace System.Diagnostics
                     FilterAndTransform.DestroyFilterAndTransformList(ref _specs);
                 }
             }
+        }
+
+        // trivial helper to allow you to join two strings the first of which can be null.  
+        private static string NewLineSeparate(string str1, string str2)
+        {
+            Debug.Assert(str2 != null);
+            if (string.IsNullOrEmpty(str1))
+                return str2;
+            return str1 + "\n" + str2;
         }
 
         #region debugger hooks 
@@ -378,7 +441,7 @@ namespace System.Diagnostics
                 for (;;)
                 {
                     // Skip trailing whitespace.
-                    while (0 < endIdx && Char.IsWhiteSpace(filterAndPayloadSpecs[endIdx - 1]))
+                    while (0 < endIdx && char.IsWhiteSpace(filterAndPayloadSpecs[endIdx - 1]))
                         --endIdx;
 
                     int newlineIdx = filterAndPayloadSpecs.LastIndexOf('\n', endIdx - 1, endIdx);
@@ -387,7 +450,7 @@ namespace System.Diagnostics
                         startIdx = newlineIdx + 1;  // starts after the newline, or zero if we don't find one.   
 
                     // Skip leading whitespace
-                    while (startIdx < endIdx && Char.IsWhiteSpace(filterAndPayloadSpecs[startIdx]))
+                    while (startIdx < endIdx && char.IsWhiteSpace(filterAndPayloadSpecs[startIdx]))
                         startIdx++;
 
                     specList = new FilterAndTransform(filterAndPayloadSpecs, startIdx, endIdx, eventSource, specList);
@@ -444,7 +507,7 @@ namespace System.Diagnostics
                 {
                     listenerNameFilter = filterAndPayloadSpec.Substring(startIdx, slashIdx - startIdx);
 
-                    var atIdx = filterAndPayloadSpec.IndexOf('@', slashIdx+1, endEventNameIdx - slashIdx - 1);
+                    var atIdx = filterAndPayloadSpec.IndexOf('@', slashIdx + 1, endEventNameIdx - slashIdx - 1);
                     if (0 <= atIdx)
                     {
                         activityName = filterAndPayloadSpec.Substring(atIdx + 1, endEventNameIdx - atIdx - 1);
@@ -591,8 +654,7 @@ namespace System.Diagnostics
                             foreach (var property in curTypeInfo.DeclaredProperties)
                             {
                                 var propertyType = property.PropertyType;
-                                if (propertyType == typeof(string) || propertyType.GetTypeInfo().IsPrimitive)
-                                    newSerializableArgs = new TransformSpec(property.Name, 0, property.Name.Length, newSerializableArgs);
+                                newSerializableArgs = new TransformSpec(property.Name, 0, property.Name.Length, newSerializableArgs);
                             }
                             _expectedArgType = argType;
                             _implicitTransforms = Reverse(newSerializableArgs);
@@ -659,10 +721,10 @@ namespace System.Diagnostics
             /// </summary>
             public TransformSpec(string transformSpec, int startIdx, int endIdx, TransformSpec next = null)
             {
+                Debug.Assert(transformSpec != null && startIdx < endIdx);
 #if DEBUG
                 string spec = transformSpec.Substring(startIdx, endIdx - startIdx);
 #endif
-                Debug.Assert(transformSpec != null && startIdx < endIdx);
                 Next = next;
 
                 // Pick off the Var=
@@ -738,13 +800,13 @@ namespace System.Diagnostics
                 public object Fetch(object obj)
                 {
                     Type objType = obj.GetType();
-                    if (objType != _expectedType)
+                    PropertyFetch fetch = _fetchForExpectedType;
+                    if (fetch == null || fetch.Type != objType)
                     {
-                        var typeInfo = objType.GetTypeInfo();
-                        _fetchForExpectedType = PropertyFetch.FetcherForProperty(typeInfo.GetDeclaredProperty(_propertyName));
-                        _expectedType = objType;
+                        _fetchForExpectedType = fetch = PropertyFetch.FetcherForProperty(
+                            objType, objType.GetTypeInfo().GetDeclaredProperty(_propertyName));
                     }
-                    return _fetchForExpectedType.Fetch(obj);
+                    return fetch.Fetch(obj);
                 }
 
                 /// <summary>
@@ -758,21 +820,29 @@ namespace System.Diagnostics
                 /// to efficiently fetch that property from a .NET object (See Fetch method).  
                 /// It hides some slightly complex generic code.  
                 /// </summary>
-                class PropertyFetch
+                private class PropertyFetch
                 {
+                    protected PropertyFetch(Type type)
+                    {
+                        Debug.Assert(type != null);
+                        Type = type;
+                    }
+
+                    internal Type Type { get; }
+
                     /// <summary>
                     /// Create a property fetcher from a .NET Reflection PropertyInfo class that
                     /// represents a property of a particular type.  
                     /// </summary>
-                    public static PropertyFetch FetcherForProperty(PropertyInfo propertyInfo)
+                    public static PropertyFetch FetcherForProperty(Type type, PropertyInfo propertyInfo)
                     {
                         if (propertyInfo == null)
-                            return new PropertyFetch();     // returns null on any fetch.
+                            return new PropertyFetch(type);     // returns null on any fetch.
 
                         var typedPropertyFetcher = typeof(TypedFetchProperty<,>);
                         var instantiatedTypedPropertyFetcher = typedPropertyFetcher.GetTypeInfo().MakeGenericType(
                             propertyInfo.DeclaringType, propertyInfo.PropertyType);
-                        return (PropertyFetch)Activator.CreateInstance(instantiatedTypedPropertyFetcher, propertyInfo);
+                        return (PropertyFetch)Activator.CreateInstance(instantiatedTypedPropertyFetcher, type, propertyInfo);
                     }
 
                     /// <summary>
@@ -782,9 +852,9 @@ namespace System.Diagnostics
 
                     #region private 
 
-                    private class TypedFetchProperty<TObject, TProperty> : PropertyFetch
+                    private sealed class TypedFetchProperty<TObject, TProperty> : PropertyFetch
                     {
-                        public TypedFetchProperty(PropertyInfo property)
+                        public TypedFetchProperty(Type type, PropertyInfo property) : base(type)
                         {
                             _propertyFetch = (Func<TObject, TProperty>)property.GetMethod.CreateDelegate(typeof(Func<TObject, TProperty>));
                         }
@@ -798,8 +868,7 @@ namespace System.Diagnostics
                 }
 
                 private string _propertyName;
-                private Type _expectedType;
-                private PropertyFetch _fetchForExpectedType;
+                private volatile PropertyFetch _fetchForExpectedType;
                 #endregion
             }
 
@@ -809,7 +878,7 @@ namespace System.Diagnostics
         }
 
         /// <summary>
-        /// CallbackObserver is a adapter class that creates an observer (which you can pass
+        /// CallbackObserver is an adapter class that creates an observer (which you can pass
         /// to IObservable.Subscribe), and calls the given callback every time the 'next' 
         /// operation on the IObserver happens. 
         /// </summary>

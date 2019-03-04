@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using Xunit;
+using System.Tests;
 
 namespace System.IO.Tests
 {
@@ -32,7 +33,7 @@ namespace System.IO.Tests
             var innerException = new Exception("Inner exception");
             var exception = new FileLoadException(message, innerException);
             ExceptionUtility.ValidateExceptionProperties(exception, hResult: HResults.COR_E_FILELOAD, innerException: innerException, message: message);
-            Assert.Equal(null, exception.FileName);
+            Assert.Null(exception.FileName);
         }
 
         [Fact]
@@ -57,6 +58,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.UapAot, "Exception strings not guaranteed on UapAot.")]
         public static void ToStringTest()
         {
             string message = "this is not the file you're looking for";
@@ -76,6 +78,17 @@ namespace System.IO.Tests
                 Assert.False(string.IsNullOrEmpty(exception.StackTrace));
                 Assert.Contains(exception.StackTrace, exception.ToString());
             }
+        }
+
+        [Fact]
+        public static void FusionLogTest()
+        {
+            string message = "this is not the file you're looking for";
+            string fileName = "file.txt";
+            var innerException = new Exception("Inner exception");
+            var exception = new FileLoadException(message, fileName, innerException);
+
+            Assert.Null(exception.FusionLog);
         }
     }
 }

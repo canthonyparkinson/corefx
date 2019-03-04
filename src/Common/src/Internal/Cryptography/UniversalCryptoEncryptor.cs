@@ -28,11 +28,21 @@ namespace Internal.Cryptography
             return BasicSymmetricCipher.Transform(inputBuffer, inputOffset, inputCount, outputBuffer, outputOffset);
         }
 
-        protected sealed override byte[] UncheckedTransformFinalBlock(byte[] inputBuffer, int inputOffset, int inputCount)
+        protected sealed override unsafe byte[] UncheckedTransformFinalBlock(byte[] inputBuffer, int inputOffset, int inputCount)
         {
             byte[] paddedBlock = PadBlock(inputBuffer, inputOffset, inputCount);
-            byte[] output = BasicSymmetricCipher.TransformFinal(paddedBlock, 0, paddedBlock.Length);
-            return output;
+
+            fixed (byte* paddedBlockPtr = paddedBlock)
+            {
+                byte[] output = BasicSymmetricCipher.TransformFinal(paddedBlock, 0, paddedBlock.Length);
+
+                if (paddedBlock != inputBuffer)
+                {
+                    CryptographicOperations.ZeroMemory(paddedBlock);
+                }
+
+                return output;
+            }
         }
 
         private byte[] PadBlock(byte[] block, int offset, int count)
@@ -48,6 +58,31 @@ namespace Internal.Cryptography
 
                     result = new byte[count];
                     Buffer.BlockCopy(block, offset, result, 0, result.Length);
+                    break;
+
+                // ANSI padding fills the blocks with zeros and adds the total number of padding bytes as
+                // the last pad byte, adding an extra block if the last block is complete.
+                //
+                // x 00 00 00 00 00 00 07
+                case PaddingMode.ANSIX923:
+                    result = new byte[count + padBytes];
+
+                    Buffer.BlockCopy(block, offset, result, 0, count);
+                    result[result.Length - 1] = (byte)padBytes;
+
+                    break;
+
+                // ISO padding fills the blocks up with random bytes and adds the total number of padding
+                // bytes as the last pad byte, adding an extra block if the last block is complete.
+                //
+                // xx rr rr rr rr rr rr 07
+                case PaddingMode.ISO10126:
+                    result = new byte[count + padBytes];
+                    
+                    Buffer.BlockCopy(block, offset, result, 0, count);
+                    RandomNumberGenerator.Fill(result.AsSpan(count + 1, padBytes - 1));
+                    result[result.Length - 1] = (byte)padBytes;
+
                     break;
 
                 // PKCS padding fills the blocks up with bytes containing the total number of padding bytes

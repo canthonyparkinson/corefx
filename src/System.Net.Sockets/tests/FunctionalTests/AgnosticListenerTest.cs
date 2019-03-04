@@ -3,7 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Net.Test.Common;
-
+using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -19,6 +19,7 @@ namespace System.Net.Sockets.Tests
             Assert.True(Capability.IPv4Support() && Capability.IPv6Support());
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void Create_Success()
         {
@@ -30,58 +31,66 @@ namespace System.Net.Sockets.Tests
             listener.Stop();
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
-        public void ConnectWithV4_Success()
+        public async Task ConnectWithV4_Success()
         {
-            int port;
-            TcpListener listener = SocketTestExtensions.CreateAndStartTcpListenerOnAnonymousPort(out port);
-            IAsyncResult asyncResult = listener.BeginAcceptTcpClient(null, null);
+            TcpListener listener = SocketTestExtensions.CreateAndStartTcpListenerOnAnonymousPort(out int port);
+            Task<TcpClient> acceptTask = Task.Factory.FromAsync(listener.BeginAcceptTcpClient(null, null), listener.EndAcceptTcpClient);
 
             TcpClient client = new TcpClient(AddressFamily.InterNetwork);
-            client.ConnectAsync(IPAddress.Loopback, port).GetAwaiter().GetResult();
+            Task connectTask = client.ConnectAsync(IPAddress.Loopback, port);
 
-            TcpClient acceptedClient = listener.EndAcceptTcpClient(asyncResult);
+            await (new Task[] { acceptTask, connectTask }).WhenAllOrAnyFailed();
+                        
             client.Dispose();
-            acceptedClient.Dispose();
+            acceptTask.Result.Dispose();
             listener.Stop();
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
-        public void ConnectWithV6_Success()
+        public async Task ConnectWithV6_Success()
         {
-            int port;
-            TcpListener listener = SocketTestExtensions.CreateAndStartTcpListenerOnAnonymousPort(out port);
-            IAsyncResult asyncResult = listener.BeginAcceptTcpClient(null, null);
+            TcpListener listener = SocketTestExtensions.CreateAndStartTcpListenerOnAnonymousPort(out int port);
+            Task<TcpClient> acceptTask = Task.Factory.FromAsync(listener.BeginAcceptTcpClient(null, null), listener.EndAcceptTcpClient);
 
             TcpClient client = new TcpClient(AddressFamily.InterNetworkV6);
-            client.ConnectAsync(IPAddress.IPv6Loopback, port).GetAwaiter().GetResult();
+            Task connectTask = client.ConnectAsync(IPAddress.IPv6Loopback, port);
 
-            TcpClient acceptedClient = listener.EndAcceptTcpClient(asyncResult);
+            await (new Task[] { acceptTask, connectTask }).WhenAllOrAnyFailed();
+
             client.Dispose();
-            acceptedClient.Dispose();
+            acceptTask.Result.Dispose();
             listener.Stop();
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
-        public void ConnectWithV4AndV6_Success()
+        public async Task ConnectWithV4AndV6_Success()
         {
-            int port;
-            TcpListener listener = SocketTestExtensions.CreateAndStartTcpListenerOnAnonymousPort(out port);
-            IAsyncResult asyncResult = listener.BeginAcceptTcpClient(null, null);
+            TcpListener listener = SocketTestExtensions.CreateAndStartTcpListenerOnAnonymousPort(out int port);
+            Task<TcpClient> acceptTask = Task.Factory.FromAsync(listener.BeginAcceptTcpClient(null, null), listener.EndAcceptTcpClient);
 
             TcpClient v6Client = new TcpClient(AddressFamily.InterNetworkV6);
-            v6Client.ConnectAsync(IPAddress.IPv6Loopback, port).GetAwaiter().GetResult();
+            Task connectTask = v6Client.ConnectAsync(IPAddress.IPv6Loopback, port);
 
-            TcpClient acceptedV6Client = listener.EndAcceptTcpClient(asyncResult);
+            Task[] tasks = new Task[] { acceptTask, connectTask };
+            await tasks.WhenAllOrAnyFailed();
+
+            TcpClient acceptedV6Client = acceptTask.Result;
             Assert.Equal(AddressFamily.InterNetworkV6, acceptedV6Client.Client.RemoteEndPoint.AddressFamily);
             Assert.Equal(AddressFamily.InterNetworkV6, v6Client.Client.RemoteEndPoint.AddressFamily);
 
-            asyncResult = listener.BeginAcceptTcpClient(null, null);
+            acceptTask = Task.Factory.FromAsync(listener.BeginAcceptTcpClient(null, null), listener.EndAcceptTcpClient);
 
             TcpClient v4Client = new TcpClient(AddressFamily.InterNetwork);
-            v4Client.ConnectAsync(IPAddress.Loopback, port).GetAwaiter().GetResult();
+            connectTask = v4Client.ConnectAsync(IPAddress.Loopback, port);
+            tasks[0] = acceptTask;
+            tasks[1] = connectTask;
+            await tasks.WhenAllOrAnyFailed();
 
-            TcpClient acceptedV4Client = listener.EndAcceptTcpClient(asyncResult);
+            TcpClient acceptedV4Client = acceptTask.Result;
             Assert.Equal(AddressFamily.InterNetworkV6, acceptedV4Client.Client.RemoteEndPoint.AddressFamily);
             Assert.Equal(AddressFamily.InterNetwork, v4Client.Client.RemoteEndPoint.AddressFamily);
 
@@ -94,19 +103,41 @@ namespace System.Net.Sockets.Tests
             listener.Stop();
         }
 
-        #region GC Finalizer test
-        // This test assumes sequential execution of tests and that it is going to be executed after other tests
-        // that used Sockets. 
         [Fact]
-        public void TestFinalizers()
+        public void StaticCreate_Success()
         {
-            // Making several passes through the FReachable list.
-            for (int i = 0; i < 3; i++)
-            {
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
-            }
+            TcpListener listener = TcpListener.Create(0);
+
+            IPEndPoint ep = (IPEndPoint)listener.LocalEndpoint;
+            Assert.Equal(ep.Address, IPAddress.IPv6Any);
+            Assert.Equal(ep.Port, 0);
+            Assert.True(listener.Server.DualMode);
+
+            listener.Start();
+            listener.Stop();
         }
-        #endregion 
+
+        [OuterLoop] // TODO: Issue #11345
+        [Theory]
+        [PlatformSpecific(TestPlatforms.Windows)]  // Unix platforms do not support TcpListener.AllowNatTraversal
+        [InlineData(true, IPProtectionLevel.Unrestricted)]
+        [InlineData(false, IPProtectionLevel.EdgeRestricted)]
+        public void AllowNatTraversal_Windows(bool allow, IPProtectionLevel resultLevel)
+        {
+            var l = new TcpListener(IPAddress.Any, 0);
+            l.AllowNatTraversal(allow);
+            Assert.Equal((int)resultLevel, (int)l.Server.GetSocketOption(SocketOptionLevel.IP, SocketOptionName.IPProtectionLevel));
+        }
+
+        [OuterLoop] // TODO: Issue #11345
+        [Theory]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // Unix platforms do not support TcpListener.AllowNatTraversal
+        [InlineData(true)]
+        [InlineData(false)]
+        public void AllowNatTraversal_AnyUnix(bool allow)
+        {
+            var l = new TcpListener(IPAddress.Any, 0);
+            Assert.Throws<PlatformNotSupportedException>(() => l.AllowNatTraversal(allow));
+        }
     }
 }

@@ -1,0 +1,9 @@
+﻿<Project>
+  <PropertyGroup>
+    <BuildConfigurations>
+      netstandard-Windows_NT;
+      netstandard-OSX;
+      netstandard-Unix;
+    </BuildConfigurations>
+  </PropertyGroup>
+</Project>

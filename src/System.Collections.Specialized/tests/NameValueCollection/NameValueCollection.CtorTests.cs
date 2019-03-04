@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections;
 using System.Collections.Generic;
 using Xunit;
 
@@ -13,6 +14,32 @@ namespace System.Collections.Specialized.Tests
         public void Ctor_Empty()
         {
             NameValueCollection nameValueCollection = new NameValueCollection();
+            Assert.Equal(0, nameValueCollection.Count);
+            Assert.Equal(0, nameValueCollection.Keys.Count);
+            Assert.Equal(0, nameValueCollection.AllKeys.Length);
+
+            Assert.False(((ICollection)nameValueCollection).IsSynchronized);
+        }
+
+        [Fact]
+        public void Ctor_Provider_Comparer()
+        {
+#pragma warning disable CS0618 // Type or member is obsolete
+            NameValueCollection nameValueCollection = new NameValueCollection(CaseInsensitiveHashCodeProvider.Default, CaseInsensitiveComparer.Default);
+#pragma warning restore CS0618 // Type or member is obsolete
+            Assert.Equal(0, nameValueCollection.Count);
+            Assert.Equal(0, nameValueCollection.Keys.Count);
+            Assert.Equal(0, nameValueCollection.AllKeys.Length);
+
+            Assert.False(((ICollection)nameValueCollection).IsSynchronized);
+        }
+
+        [Fact]
+        public void Ctor_Int_Provider_Comparer()
+        {
+#pragma warning disable CS0618 // Type or member is obsolete
+            NameValueCollection nameValueCollection = new NameValueCollection(5, CaseInsensitiveHashCodeProvider.Default, CaseInsensitiveComparer.Default);
+#pragma warning restore CS0618 // Type or member is obsolete
             Assert.Equal(0, nameValueCollection.Count);
             Assert.Equal(0, nameValueCollection.Keys.Count);
             Assert.Equal(0, nameValueCollection.AllKeys.Length);
@@ -43,9 +70,9 @@ namespace System.Collections.Specialized.Tests
         [Fact]
         public void Ctor_NegativeCapacity_ThrowsArgumentOutOfRangeException()
         {
-            Assert.Throws<ArgumentOutOfRangeException>("capacity", () => new NameValueCollection(-1));
-            Assert.Throws<ArgumentOutOfRangeException>("capacity", () => new NameValueCollection(-1, new NameValueCollection()));
-            Assert.Throws<ArgumentOutOfRangeException>("capacity", () => new NameValueCollection(-1, (IEqualityComparer)null
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("capacity", () => new NameValueCollection(-1));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("capacity", () => new NameValueCollection(-1, new NameValueCollection()));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("capacity", () => new NameValueCollection(-1, (IEqualityComparer)null
                 ));
 
             Assert.Throws<OutOfMemoryException>(() => new NameValueCollection(int.MaxValue));
@@ -82,8 +109,8 @@ namespace System.Collections.Specialized.Tests
         [Fact]
         public void Ctor_NullNameValueCollection_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>("c", () => new NameValueCollection((NameValueCollection)null));
-            Assert.Throws<ArgumentNullException>("col", () => new NameValueCollection(0, (NameValueCollection)null));
+            AssertExtensions.Throws<ArgumentNullException>("c", () => new NameValueCollection((NameValueCollection)null));
+            AssertExtensions.Throws<ArgumentNullException>("col", () => new NameValueCollection(0, (NameValueCollection)null));
         }
         
         public static IEnumerable<object[]> Ctor_Int_NameValueCollection_TestData()

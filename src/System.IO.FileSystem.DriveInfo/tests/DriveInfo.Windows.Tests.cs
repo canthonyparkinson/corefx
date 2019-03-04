@@ -16,18 +16,30 @@ namespace System.IO.FileSystem.DriveInfoTests
 {
     public class DriveInfoWindowsTests
     {
+        [Theory]
+        [InlineData(":")]
+        [InlineData("://")]
+        [InlineData(@":\")]
+        [InlineData(":/")]
+        [InlineData(@":\\")]
+        [InlineData("Az")]
+        [InlineData("1")]
+        [InlineData("a1")]
+        [InlineData(@"\\share")]
+        [InlineData(@"\\")]
+        [InlineData("c ")]
+        [InlineData("")]
+        [InlineData(" c")]
+        public void Ctor_InvalidPath_ThrowsArgumentException(string driveName)
+        {
+            AssertExtensions.Throws<ArgumentException>("driveName", null, () => new DriveInfo(driveName));
+        }
+
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]
         public void TestConstructor()
         {
-            string[] invalidInput = { ":\0", ":", "://", @":\", ":/", @":\\", "Az", "1", "a1", @"\\share", @"\\", "c ", string.Empty, " c" };
             string[] variableInput = { "{0}", "{0}", "{0}:", "{0}:", @"{0}:\", @"{0}:\\", "{0}://" };
-
-            // Test Invalid input
-            foreach (var input in invalidInput)
-            {
-                Assert.Throws<ArgumentException>(() => { new DriveInfo(input); });
-            }
 
             // Test Null
             Assert.Throws<ArgumentNullException>(() => { new DriveInfo(null); });
@@ -43,7 +55,7 @@ namespace System.IO.FileSystem.DriveInfoTests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]
         public void TestGetDrives()
         {
             var validExpectedDrives = GetValidDriveLettersOnMachine();
@@ -60,10 +72,37 @@ namespace System.IO.FileSystem.DriveInfoTests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        public void TestDriveProperties_AppContainer()
+        {
+            DriveInfo validDrive = DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed).First();
+            bool isReady = validDrive.IsReady;
+            Assert.NotNull(validDrive.Name);
+            Assert.NotNull(validDrive.RootDirectory.Name);
+
+            if (PlatformDetection.IsInAppContainer)
+            {
+                Assert.Throws<UnauthorizedAccessException>(() => validDrive.AvailableFreeSpace);
+                Assert.Throws<UnauthorizedAccessException>(() => validDrive.DriveFormat);
+                Assert.Throws<UnauthorizedAccessException>(() => validDrive.TotalFreeSpace);
+                Assert.Throws<UnauthorizedAccessException>(() => validDrive.TotalSize);
+                Assert.Throws<UnauthorizedAccessException>(() => validDrive.VolumeLabel);
+            }
+            else
+            {
+                Assert.NotNull(validDrive.DriveFormat);
+                Assert.True(validDrive.AvailableFreeSpace > 0);
+                Assert.True(validDrive.TotalFreeSpace > 0);
+                Assert.True(validDrive.TotalSize > 0);
+                Assert.NotNull(validDrive.VolumeLabel);
+            }
+        }
+
+        [Fact]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.Uap, "Accessing drive format is not permitted inside an AppContainer.")]
         public void TestDriveFormat()
         {
-            var validDrive = DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed).First();
+            DriveInfo validDrive = DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed).First();
             const int volNameLen = 50;
             StringBuilder volumeName = new StringBuilder(volNameLen);
             const int fileSystemNameLen = 50;
@@ -71,6 +110,7 @@ namespace System.IO.FileSystem.DriveInfoTests
             int serialNumber, maxFileNameLen, fileSystemFlags;
             bool r = GetVolumeInformation(validDrive.Name, volumeName, volNameLen, out serialNumber, out maxFileNameLen, out fileSystemFlags, fileSystemName, fileSystemNameLen);
             var fileSystem = fileSystemName.ToString();
+
             if (r)
             {
                 Assert.Equal(fileSystem, validDrive.DriveFormat);
@@ -86,7 +126,7 @@ namespace System.IO.FileSystem.DriveInfoTests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]
         public void TestDriveType()
         {
             var validDrive = DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed).First();
@@ -99,7 +139,8 @@ namespace System.IO.FileSystem.DriveInfoTests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.Uap, "GetDiskFreeSpaceEx blocked in AC")]
         public void TestValidDiskSpaceProperties()
         {
             bool win32Result;
@@ -131,7 +172,7 @@ namespace System.IO.FileSystem.DriveInfoTests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]
         public void TestInvalidDiskProperties()
         {
             string invalidDriveName = GetInvalidDriveLettersOnMachine().First().ToString();
@@ -151,33 +192,53 @@ namespace System.IO.FileSystem.DriveInfoTests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]
         public void GetVolumeLabel_Returns_CorrectLabel()
         {
-            int serialNumber, maxFileNameLen, fileSystemFlags;
-            int volNameLen = 50;
-            int fileNameLen = 50;
-            StringBuilder volumeName = new StringBuilder(volNameLen);
-            StringBuilder fileSystemName = new StringBuilder(fileNameLen);
+            void DoDriveCheck()
+            {
+                // Get Volume Label - valid drive
+                int serialNumber, maxFileNameLen, fileSystemFlags;
+                int volNameLen = 50;
+                int fileNameLen = 50;
+                StringBuilder volumeName = new StringBuilder(volNameLen);
+                StringBuilder fileSystemName = new StringBuilder(fileNameLen);
 
-            // Get Volume Label - valid drive
-            var validDrive = DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed).First();
-            bool r = GetVolumeInformation(validDrive.Name, volumeName, volNameLen, out serialNumber, out maxFileNameLen, out fileSystemFlags, fileSystemName, fileNameLen);
-            if (r)
+                DriveInfo validDrive = DriveInfo.GetDrives().First(d => d.DriveType == DriveType.Fixed);
+                bool volumeInformationSuccess = GetVolumeInformation(validDrive.Name, volumeName, volNameLen, out serialNumber, out maxFileNameLen, out fileSystemFlags, fileSystemName, fileNameLen);
+
+                if (volumeInformationSuccess)
+                {
+                    Assert.Equal(volumeName.ToString(), validDrive.VolumeLabel);
+                }
+                else // if we can't compare the volumeName, we should at least check that getting it doesn't throw
+                {
+                    var name = validDrive.VolumeLabel;
+                }
+            };
+            
+            if (PlatformDetection.IsInAppContainer)
             {
-                Assert.Equal(volumeName.ToString(), validDrive.VolumeLabel);
+                Assert.Throws<UnauthorizedAccessException>(() => DoDriveCheck());
             }
-            else // if we can't compare the volumeName, we should at least check that getting it doesn't throw
+            else 
             {
-                var name = validDrive.VolumeLabel;
+                DoDriveCheck();
             }
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]
         public void SetVolumeLabel_Roundtrips()
         {
             DriveInfo drive = DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed).First();
+            // Inside an AppContainer access to VolumeLabel is denied.
+            if (PlatformDetection.IsInAppContainer)
+            {
+                Assert.Throws<UnauthorizedAccessException>(() => drive.VolumeLabel);
+                return;
+            }
+
             string currentLabel = drive.VolumeLabel;
             try
             {
@@ -188,7 +249,7 @@ namespace System.IO.FileSystem.DriveInfoTests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]
         public void VolumeLabelOnNetworkOrCdRom_Throws()
         {
             // Test setting the volume label on a Network or CD-ROM
@@ -206,17 +267,17 @@ namespace System.IO.FileSystem.DriveInfoTests
             }
         }
 
-        [DllImport("api-ms-win-core-file-l1-1-0.dll", SetLastError = true)]
+        [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern int GetLogicalDrives();
 
-        [DllImport("api-ms-win-core-file-l1-1-0.dll", EntryPoint = "GetVolumeInformationW", CharSet = CharSet.Unicode, SetLastError = true, BestFitMapping = false)]
+        [DllImport("kernel32.dll", EntryPoint = "GetVolumeInformationW", CharSet = CharSet.Unicode, SetLastError = true, BestFitMapping = false)]
         internal static extern bool GetVolumeInformation(string drive, StringBuilder volumeName, int volumeNameBufLen, out int volSerialNumber, out int maxFileNameLen, out int fileSystemFlags, StringBuilder fileSystemName, int fileSystemNameBufLen);
 
-        [DllImport("api-ms-win-core-file-l1-1-0.dll", SetLastError = true)]
+        [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "GetDriveTypeW", CharSet = CharSet.Unicode)]
         internal static extern int GetDriveType(string drive);
 
-        [DllImport("api-ms-win-core-file-l1-1-0.dll", SetLastError = true)]
-        internal static extern bool GetDiskFreeSpaceEx(String drive, out long freeBytesForUser, out long totalBytes, out long freeBytes);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool GetDiskFreeSpaceEx(string drive, out long freeBytesForUser, out long totalBytes, out long freeBytes);
 
         private IEnumerable<char> GetValidDriveLettersOnMachine()
         {

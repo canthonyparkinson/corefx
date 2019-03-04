@@ -2,21 +2,28 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.Serialization;
 
 namespace System.Collections.Generic
 {
     [DebuggerTypeProxy(typeof(ICollectionDebugView<>))]
     [DebuggerDisplay("Count = {Count}")]
-    public class LinkedList<T> : ICollection<T>, System.Collections.ICollection, IReadOnlyCollection<T>
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
+    public class LinkedList<T> : ICollection<T>, ICollection, IReadOnlyCollection<T>, ISerializable, IDeserializationCallback
     {
         // This LinkedList is a doubly-Linked circular list.
         internal LinkedListNode<T> head;
         internal int count;
         internal int version;
-        private Object _syncRoot;
+        private SerializationInfo _siInfo; //A temporary variable which we need during deserialization.  
+
+        // names for serialization
+        private const string VersionName = "Version"; // Do not rename (binary serialization)
+        private const string CountName = "Count"; // Do not rename (binary serialization)
+        private const string ValuesName = "Data"; // Do not rename (binary serialization)
 
         public LinkedList()
         {
@@ -33,6 +40,11 @@ namespace System.Collections.Generic
             {
                 AddLast(item);
             }
+        }
+
+        protected LinkedList(SerializationInfo info, StreamingContext context)
+        {
+            _siInfo = info;
         }
 
         public int Count
@@ -320,6 +332,59 @@ namespace System.Collections.Generic
             InternalRemoveNode(head.prev);
         }
 
+        public virtual void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            // Customized serialization for LinkedList.
+            // We need to do this because it will be too expensive to Serialize each node.
+            // This will give us the flexiblility to change internal implementation freely in future.
+            if (info == null)
+            {
+                throw new ArgumentNullException(nameof(info));
+            }
+
+            info.AddValue(VersionName, version);
+            info.AddValue(CountName, count); // this is the length of the bucket array.
+
+            if (count != 0)
+            {
+                T[] array = new T[count];
+                CopyTo(array, 0);
+                info.AddValue(ValuesName, array, typeof(T[]));
+            }
+        }
+
+        public virtual void OnDeserialization(object sender)
+        {
+            if (_siInfo == null)
+            {
+                return; //Somebody had a dependency on this LinkedList and fixed us up before the ObjectManager got to it.
+            }
+
+            int realVersion = _siInfo.GetInt32(VersionName);
+            int count = _siInfo.GetInt32(CountName);
+
+            if (count != 0)
+            {
+                T[] array = (T[])_siInfo.GetValue(ValuesName, typeof(T[]));
+
+                if (array == null)
+                {
+                    throw new SerializationException(SR.Serialization_MissingValues);
+                }
+                for (int i = 0; i < array.Length; i++)
+                {
+                    AddLast(array[i]);
+                }
+            }
+            else
+            {
+                head = null;
+            }
+
+            version = realVersion;
+            _siInfo = null;
+        }
+
         private void InternalInsertNodeBefore(LinkedListNode<T> node, LinkedListNode<T> newNode)
         {
             newNode.next = node;
@@ -376,7 +441,6 @@ namespace System.Collections.Generic
             }
         }
 
-
         internal void ValidateNode(LinkedListNode<T> node)
         {
             if (node == null)
@@ -390,24 +454,14 @@ namespace System.Collections.Generic
             }
         }
 
-        bool System.Collections.ICollection.IsSynchronized
+        bool ICollection.IsSynchronized
         {
             get { return false; }
         }
 
-        object System.Collections.ICollection.SyncRoot
-        {
-            get
-            {
-                if (_syncRoot == null)
-                {
-                    System.Threading.Interlocked.CompareExchange<Object>(ref _syncRoot, new Object(), null);
-                }
-                return _syncRoot;
-            }
-        }
+        object ICollection.SyncRoot => this;
 
-        void System.Collections.ICollection.CopyTo(Array array, int index)
+        void ICollection.CopyTo(Array array, int index)
         {
             if (array == null)
             {
@@ -467,19 +521,24 @@ namespace System.Collections.Generic
             }
         }
 
-        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
         }
 
         [SuppressMessage("Microsoft.Performance", "CA1815:OverrideEqualsAndOperatorEqualsOnValueTypes", Justification = "not an expected scenario")]
-        public struct Enumerator : IEnumerator<T>, System.Collections.IEnumerator
+        public struct Enumerator : IEnumerator<T>, IEnumerator, ISerializable, IDeserializationCallback
         {
             private LinkedList<T> _list;
             private LinkedListNode<T> _node;
             private int _version;
             private T _current;
             private int _index;
+
+            const string LinkedListName = "LinkedList";
+            const string CurrentValueName = "Current";
+            const string VersionName = "Version";
+            const string IndexName = "Index";
 
             internal Enumerator(LinkedList<T> list)
             {
@@ -495,7 +554,7 @@ namespace System.Collections.Generic
                 get { return _current; }
             }
 
-            object System.Collections.IEnumerator.Current
+            object IEnumerator.Current
             {
                 get
                 {
@@ -531,7 +590,7 @@ namespace System.Collections.Generic
                 return true;
             }
 
-            void System.Collections.IEnumerator.Reset()
+            void IEnumerator.Reset()
             {
                 if (_version != _list.version)
                 {
@@ -546,6 +605,16 @@ namespace System.Collections.Generic
             public void Dispose()
             {
             }
+
+            void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+            {
+                throw new PlatformNotSupportedException();
+            }
+
+            void IDeserializationCallback.OnDeserialization(object sender)
+            {
+                throw new PlatformNotSupportedException();
+            }
         }
     }
 
@@ -559,13 +628,13 @@ namespace System.Collections.Generic
 
         public LinkedListNode(T value)
         {
-            this.item = value;
+            item = value;
         }
 
         internal LinkedListNode(LinkedList<T> list, T value)
         {
             this.list = list;
-            this.item = value;
+            item = value;
         }
 
         public LinkedList<T> List

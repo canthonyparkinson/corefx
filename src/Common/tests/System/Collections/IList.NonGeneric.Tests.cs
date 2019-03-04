@@ -69,6 +69,21 @@ namespace System.Collections.Tests
 
         protected virtual bool ExpectedFixedSize => false;
 
+        protected virtual Type IList_NonGeneric_Item_InvalidIndex_ThrowType => typeof(ArgumentOutOfRangeException);
+
+        protected virtual bool IList_NonGeneric_RemoveNonExistent_Throws => false;
+
+        /// <summary>
+        /// When calling Current of the enumerator after the end of the list and list is extended by new items.
+        /// Tests are included to cover two behavioral scenarios:
+        ///   - Throwing an InvalidOperationException
+        ///   - Returning an undefined value.
+        /// 
+        /// If this property is set to true, the tests ensure that the exception is thrown. The default value is
+        /// the same as Enumerator_Current_UndefinedOperation_Throws.
+        /// </summary>
+        protected virtual bool IList_CurrentAfterAdd_Throws => Enumerator_Current_UndefinedOperation_Throws;
+
         #endregion
 
         #region ICollection Helper Methods
@@ -80,11 +95,12 @@ namespace System.Collections.Tests
         /// <summary>
         /// Returns a set of ModifyEnumerable delegates that modify the enumerable passed to them.
         /// </summary>
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations)
         {
-            get
+            if ((operations & ModifyOperation.Add) == ModifyOperation.Add)
             {
-                yield return (IEnumerable enumerable) => {
+                yield return (IEnumerable enumerable) =>
+                {
                     IList casted = ((IList)enumerable);
                     if (!casted.IsFixedSize && !casted.IsReadOnly)
                     {
@@ -93,7 +109,11 @@ namespace System.Collections.Tests
                     }
                     return false;
                 };
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Insert) == ModifyOperation.Insert)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     IList casted = ((IList)enumerable);
                     if (!casted.IsFixedSize && !casted.IsReadOnly)
                     {
@@ -102,7 +122,9 @@ namespace System.Collections.Tests
                     }
                     return false;
                 };
-                yield return (IEnumerable enumerable) => {
+
+                yield return (IEnumerable enumerable) =>
+                {
                     IList casted = ((IList)enumerable);
                     if (casted.Count > 0 && !casted.IsReadOnly)
                     {
@@ -111,8 +133,11 @@ namespace System.Collections.Tests
                     }
                     return false;
                 };
-
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Remove) == ModifyOperation.Remove)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     IList casted = ((IList)enumerable);
                     if (casted.Count > 0 && !casted.IsFixedSize && !casted.IsReadOnly)
                     {
@@ -121,7 +146,8 @@ namespace System.Collections.Tests
                     }
                     return false;
                 };
-                yield return (IEnumerable enumerable) => {
+                yield return (IEnumerable enumerable) =>
+                {
                     IList casted = ((IList)enumerable);
                     if (casted.Count > 0 && !casted.IsFixedSize && !casted.IsReadOnly)
                     {
@@ -130,7 +156,11 @@ namespace System.Collections.Tests
                     }
                     return false;
                 };
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Clear) == ModifyOperation.Clear)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     IList casted = ((IList)enumerable);
                     if (casted.Count > 0 && !casted.IsFixedSize && !casted.IsReadOnly)
                     {
@@ -174,20 +204,20 @@ namespace System.Collections.Tests
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void IList_NonGeneric_ItemGet_NegativeIndex_ThrowsArgumentOutOfRangeException(int count)
+        public void IList_NonGeneric_ItemGet_NegativeIndex_ThrowsException(int count)
         {
             IList list = NonGenericIListFactory(count);
-            Assert.Throws<ArgumentOutOfRangeException>(() => list[-1]);
-            Assert.Throws<ArgumentOutOfRangeException>(() => list[int.MinValue]);
+            Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list[-1]);
+            Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list[int.MinValue]);
         }
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void IList_NonGeneric_ItemGet_IndexGreaterThanListCount_ThrowsArgumentOutOfRangeException(int count)
+        public void IList_NonGeneric_ItemGet_IndexGreaterThanListCount_ThrowsException(int count)
         {
             IList list = NonGenericIListFactory(count);
-            Assert.Throws<ArgumentOutOfRangeException>(() => list[count]);
-            Assert.Throws<ArgumentOutOfRangeException>(() => list[count + 1]);
+            Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list[count]);
+            Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list[count + 1]);
         }
 
         [Theory]
@@ -205,28 +235,28 @@ namespace System.Collections.Tests
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void IList_NonGeneric_ItemSet_NegativeIndex_ThrowsArgumentOutOfRangeException(int count)
+        public void IList_NonGeneric_ItemSet_NegativeIndex_ThrowsException(int count)
         {
             if (!IsReadOnly)
             {
                 IList list = NonGenericIListFactory(count);
                 object validAdd = CreateT(0);
-                Assert.Throws<ArgumentOutOfRangeException>(() => list[-1] = validAdd);
-                Assert.Throws<ArgumentOutOfRangeException>(() => list[int.MinValue] = validAdd);
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list[-1] = validAdd);
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list[int.MinValue] = validAdd);
                 Assert.Equal(count, list.Count);
             }
         }
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void IList_NonGeneric_ItemSet_IndexGreaterThanListCount_ThrowsArgumentOutOfRangeException(int count)
+        public void IList_NonGeneric_ItemSet_IndexGreaterThanListCount_ThrowsException(int count)
         {
             if (!IsReadOnly)
             {
                 IList list = NonGenericIListFactory(count);
                 object validAdd = CreateT(0);
-                Assert.Throws<ArgumentOutOfRangeException>(() => list[count] = validAdd);
-                Assert.Throws<ArgumentOutOfRangeException>(() => list[count + 1] = validAdd);
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list[count] = validAdd);
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list[count + 1] = validAdd);
                 Assert.Equal(count, list.Count);
             }
         }
@@ -690,14 +720,14 @@ namespace System.Collections.Tests
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void IList_NonGeneric_Insert_NegativeIndex_ThrowsArgumentOutOfRangeException(int count)
+        public void IList_NonGeneric_Insert_NegativeIndex_ThrowsException(int count)
         {
             if (!IsReadOnly && !ExpectedFixedSize)
             {
                 IList list = NonGenericIListFactory(count);
                 object validAdd = CreateT(0);
-                Assert.Throws<ArgumentOutOfRangeException>(() => list.Insert(-1, validAdd));
-                Assert.Throws<ArgumentOutOfRangeException>(() => list.Insert(int.MinValue, validAdd));
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list.Insert(-1, validAdd));
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list.Insert(int.MinValue, validAdd));
                 Assert.Equal(count, list.Count);
             }
         }
@@ -858,12 +888,20 @@ namespace System.Collections.Tests
             if (!IsReadOnly && !ExpectedFixedSize)
             {
                 int seed = count * 251;
-                IList collection = NonGenericIListFactory(count);
+                IList list = NonGenericIListFactory(count);
                 object value = CreateT(seed++);
-                while (collection.Contains(value) || Enumerable.Contains(InvalidValues, value))
+                while (list.Contains(value) || Enumerable.Contains(InvalidValues, value))
                     value = CreateT(seed++);
-                collection.Remove(value);
-                Assert.Equal(count, collection.Count);
+                list.Remove(value);
+
+                if (IList_NonGeneric_RemoveNonExistent_Throws)
+                {
+                    Assert.Throws<ArgumentException>(() => list.Remove(value));
+                }
+                else
+                {
+                    Assert.Equal(count, list.Count);
+                }
             }
         }
 
@@ -949,7 +987,7 @@ namespace System.Collections.Tests
                 IList collection = NonGenericIListFactory(count);
                 Assert.All(InvalidValues, value =>
                 {
-                    Assert.ThrowsAny<ArgumentException>(() => collection.Remove(value));
+                    Assert.Throws<ArgumentException>(() => collection.Remove(value));
                 });
                 Assert.Equal(count, collection.Count);
             }
@@ -961,28 +999,28 @@ namespace System.Collections.Tests
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void IList_NonGeneric_RemoveAt_NegativeIndex_ThrowsArgumentOutOfRangeException(int count)
+        public void IList_NonGeneric_RemoveAt_NegativeIndex_ThrowsException(int count)
         {
             if (!IsReadOnly && !ExpectedFixedSize)
             {
                 IList list = NonGenericIListFactory(count);
                 object validAdd = CreateT(0);
-                Assert.Throws<ArgumentOutOfRangeException>(() => list.RemoveAt(-1));
-                Assert.Throws<ArgumentOutOfRangeException>(() => list.RemoveAt(int.MinValue));
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list.RemoveAt(-1));
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list.RemoveAt(int.MinValue));
                 Assert.Equal(count, list.Count);
             }
         }
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void IList_NonGeneric_RemoveAt_IndexGreaterThanListCount_ThrowsArgumentOutOfRangeException(int count)
+        public void IList_NonGeneric_RemoveAt_IndexGreaterThanListCount_ThrowsException(int count)
         {
             if (!IsReadOnly && !ExpectedFixedSize)
             {
                 IList list = NonGenericIListFactory(count);
                 object validAdd = CreateT(0);
-                Assert.Throws<ArgumentOutOfRangeException>(() => list.RemoveAt(count));
-                Assert.Throws<ArgumentOutOfRangeException>(() => list.RemoveAt(count + 1));
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list.RemoveAt(count));
+                Assert.Throws(IList_NonGeneric_Item_InvalidIndex_ThrowType, () => list.RemoveAt(count + 1));
                 Assert.Equal(count, list.Count);
             }
         }
@@ -1027,6 +1065,48 @@ namespace System.Collections.Tests
                     list.RemoveAt(0);
                     Assert.Equal(count - index - 1, list.Count);
                 });
+            }
+        }
+
+        #endregion
+
+        #region Enumerator.Current
+
+        // Test Enumerator.Current at end after new elements was added
+        [Theory]
+        [MemberData(nameof(ValidCollectionSizes))]
+        public void IList_NonGeneric_CurrentAtEnd_AfterAdd(int count)
+        {
+            if (!IsReadOnly && !ExpectedFixedSize)
+            {
+                IList collection = NonGenericIListFactory(count);
+                IEnumerator enumerator = collection.GetEnumerator();
+                while (enumerator.MoveNext()) ; // Go to end of enumerator
+
+                if (Enumerator_Current_UndefinedOperation_Throws)
+                {
+                    Assert.Throws<InvalidOperationException>(() => enumerator.Current); // Enumerator.Current should fail
+                }
+                else
+                {
+                    var current = enumerator.Current; // Enumerator.Current should not fail
+                }
+
+                // Test after add
+                int seed = 523561;
+                for (int i = 0; i < 3; i++)
+                {
+                    collection.Add(CreateT(seed++));
+
+                    if (IList_CurrentAfterAdd_Throws)
+                    {
+                        Assert.Throws<InvalidOperationException>(() => enumerator.Current); // Enumerator.Current should fail
+                    }
+                    else
+                    {
+                        var current = enumerator.Current; // Enumerator.Current should not fail
+                    }
+                }
             }
         }
 

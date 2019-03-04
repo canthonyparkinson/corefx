@@ -3,13 +3,12 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections;
-using Xunit;
 
 namespace System.ComponentModel.Tests
 {
     public class MyTypeDescriptorContext : ITypeDescriptorContext
     {
-        public IContainer Container { get { return null; } }
+        public IContainer Container => null;
         public object Instance { get { return null; } }
         public PropertyDescriptor PropertyDescriptor { get { return null; } }
         public bool OnComponentChanging() { return true; }
@@ -35,6 +34,20 @@ namespace System.ComponentModel.Tests
         Option1 = 1,
         Option2 = 2,
         Option3 = 4
+    }
+
+    [Flags]
+    public enum ULongFlagsEnum : ulong
+    {
+        Bit62 = 1UL << 62,
+        Bit63 = 1UL << 63
+    }
+
+    [Flags]
+    public enum LongFlagsEnum : long
+    {
+        Bit62 = 1L << 62,
+        Bit63 = 1L << 63
     }
 
     public class FormattableClass : IFormattable
@@ -82,7 +95,13 @@ namespace System.ComponentModel.Tests
         }
     }
 
-    [TypeConverter("System.ComponentModel.Tests.BaseClassConverter, System.ComponentModel.TypeConverter.Tests, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null")]
+#if FUNCTIONAL_TESTS
+    [TypeConverter("System.ComponentModel.Tests.BaseClassConverter, System.ComponentModel.TypeConverter.Tests, Version=9.9.9.9, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51")]
+#elif PERFORMANCE_TESTS
+    [TypeConverter("System.ComponentModel.Tests.BaseClassConverter, System.ComponentModel.TypeConverter.PerformanceTests, Version=9.9.9.9, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51")]
+#else
+#error Define FUNCTIONAL_TESTS or PERFORMANCE_TESTS
+#endif
     public class BaseClass
     {
         public BaseClass()
@@ -96,7 +115,7 @@ namespace System.ComponentModel.Tests
             {
                 return false;
             }
-            if (otherBaseClass.BaseProperty == this.BaseProperty)
+            if (otherBaseClass.BaseProperty == BaseProperty)
             {
                 return true;
             }
@@ -159,12 +178,12 @@ namespace System.ComponentModel.Tests
         public DerivedClass()
             : base()
         {
-            this.DerivedProperty = 2;
+            DerivedProperty = 2;
         }
         public DerivedClass(int i)
             : base()
         {
-            this.DerivedProperty = i;
+            DerivedProperty = i;
         }
         public override bool Equals(object other)
         {
@@ -173,7 +192,7 @@ namespace System.ComponentModel.Tests
             {
                 return false;
             }
-            if (otherDerivedClass.DerivedProperty != this.DerivedProperty)
+            if (otherDerivedClass.DerivedProperty != DerivedProperty)
             {
                 return false;
             }
@@ -246,7 +265,7 @@ namespace System.ComponentModel.Tests
     {
         public ClassIBase()
         {
-            this.InterfaceProperty = 10;
+            InterfaceProperty = 10;
         }
         public int InterfaceProperty { get; set; }
     }
@@ -255,8 +274,8 @@ namespace System.ComponentModel.Tests
     {
         public ClassIDerived()
         {
-            this.InterfaceProperty = 20;
-            this.DerivedInterfaceProperty = this.InterfaceProperty / 2;
+            InterfaceProperty = 20;
+            DerivedInterfaceProperty = InterfaceProperty / 2;
         }
         public int InterfaceProperty { get; set; }
         public int DerivedInterfaceProperty { get; set; }

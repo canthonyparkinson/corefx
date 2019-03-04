@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace System.Threading.Tasks.Tests
 {
@@ -234,21 +235,6 @@ namespace System.Threading.Tasks.Tests
                    () => tcs.SetException(new Exception("some other exception")));
                 Assert.Throws<InvalidOperationException>(
                    () => tcs.SetException(new[] { new Exception("some other exception") }));
-
-                //
-                // Test that disposed task TCS.Task throws ODE on [Try]SetXYZ() after being Disposed
-                // It used to, but now it should throw InvalidOperationException, since the task has already completed
-                //
-                //@TODO VERIFY this one.. tests might not pass.
-                //tcs.Task.Dispose();
-
-                Assert.Throws<InvalidOperationException>(
-                    () => { tcs.SetResult(10); });
-                Assert.Throws<InvalidOperationException>(
-                    () => { tcs.SetCanceled(); });
-                Exception fake = new Exception("blah!");
-                Assert.Throws<InvalidOperationException>(
-                    () => { tcs.SetException(fake); });
             }
         }
 
@@ -1174,8 +1160,7 @@ namespace System.Threading.Tasks.Tests
             // test exceptions
             Assert.Throws<ArgumentNullException>(
                () => Task.WaitAny((Task[])null));
-            Assert.Throws<ArgumentException>(
-               () => Task.WaitAny(new Task[] { null }));
+            AssertExtensions.Throws<ArgumentException>("tasks", () => Task.WaitAny(new Task[] { null }));
             Assert.Throws<ArgumentOutOfRangeException>(
                () => Task.WaitAny(new Task[] { Task.Factory.StartNew(() => { }) }, -2));
             Assert.Throws<ArgumentOutOfRangeException>(
@@ -1337,10 +1322,11 @@ namespace System.Threading.Tasks.Tests
         public static void RunTaskWaitAllTests()
         {
             Assert.Throws<ArgumentNullException>(() => Task.WaitAll((Task[])null));
-            Assert.Throws<ArgumentException>(() => Task.WaitAll(new Task[] { null }));
+            AssertExtensions.Throws<ArgumentException>("tasks", () => Task.WaitAll(new Task[] { null }));
             Assert.Throws<ArgumentOutOfRangeException>(() => Task.WaitAll(new Task[] { Task.Factory.StartNew(() => { }) }, -2));
             Assert.Throws<ArgumentOutOfRangeException>(() => Task.WaitAll(new Task[] { Task.Factory.StartNew(() => { }) }, TimeSpan.FromMilliseconds(-2)));
 
+            ThreadPoolHelpers.EnsureMinThreadsAtLeast(10);
             RunTaskWaitAllTest(false, 1);
             RunTaskWaitAllTest(false, 10);
         }
@@ -1357,18 +1343,17 @@ namespace System.Threading.Tasks.Tests
             int nSecondHalfCount = nTaskCount - nFirstHalfCount;
 
             //CancellationTokenSource ctsForSleepAndAckCancelAction = null; // this needs to be allocated every time sleepAndAckCancelAction is about to be used
-            Action<object> emptyAction = delegate (Object o) { };
-            Action<object> sleepAction = delegate (Object o) { for (int i = 0; i < 200; i++) { } };
-            Action<object> longAction = delegate (Object o) { for (int i = 0; i < 400; i++) { } };
+            Action<object> emptyAction = delegate (object o) { };
+            Action<object> sleepAction = delegate (object o) { for (int i = 0; i < 200; i++) { } };
+            Action<object> longAction = delegate (object o) { for (int i = 0; i < 400; i++) { } };
 
-            Action<object> sleepAndAckCancelAction = delegate (Object o)
+            Action<object> sleepAndAckCancelAction = delegate (object o)
             {
                 CancellationToken ct = (CancellationToken)o;
-                while (!ct.IsCancellationRequested)
-                { }
+                if (!ct.IsCancellationRequested) ct.WaitHandle.WaitOne();
                 throw new OperationCanceledException(ct);   // acknowledge
             };
-            Action<object> exceptionThrowAction = delegate (Object o) { throw new Exception(excpMsg); };
+            Action<object> exceptionThrowAction = delegate (object o) { throw new Exception(excpMsg); };
 
             Exception e = null;
 
@@ -1380,8 +1365,8 @@ namespace System.Threading.Tasks.Tests
                 Assert.True(false, string.Format(methodInput + ":  RunTaskWaitAllTest:  > error: WaitAll() threw exception unexpectedly."));
             }
 
-            // test case 2: WaitAll() on a a group of tasks half of which is already completed, half of which is blocked when we start the wait
-            //Debug.WriteLine("  > trying: WaitAll() on a a group of tasks half of which is already ");
+            // test case 2: WaitAll() on a group of tasks half of which is already completed, half of which is blocked when we start the wait
+            //Debug.WriteLine("  > trying: WaitAll() on a group of tasks half of which is already ");
             //Debug.WriteLine("  >         completed, half of which is blocked when we start the wait");
             DoRunTaskWaitAllTest(staThread, nFirstHalfCount, emptyAction, true, false, nSecondHalfCount, sleepAction, 5000, ref e);
 
@@ -1390,8 +1375,8 @@ namespace System.Threading.Tasks.Tests
                 Assert.True(false, string.Format(methodInput + " : RunTaskWaitAllTest:  > error: WaitAll() threw exception unexpectedly."));
             }
 
-            // test case 3: WaitAll() on a a group of tasks half of which is Canceled, half of which is blocked when we start the wait
-            //Debug.WriteLine("  > trying: WaitAll() on a a group of tasks half of which is Canceled,");
+            // test case 3: WaitAll() on a group of tasks half of which is Canceled, half of which is blocked when we start the wait
+            //Debug.WriteLine("  > trying: WaitAll() on a group of tasks half of which is Canceled,");
             //Debug.WriteLine("  >         half of which is blocked when we start the wait");
             DoRunTaskWaitAllTest(staThread, nFirstHalfCount, sleepAndAckCancelAction, false, true, nSecondHalfCount, emptyAction, 5000, ref e);
 
@@ -1400,8 +1385,8 @@ namespace System.Threading.Tasks.Tests
                 Assert.True(false, string.Format(methodInput + " : RunTaskWaitAllTest:  > error: WaitAll() didn't throw TaskCanceledException while waiting on a group of already canceled tasks.> {0}", e));
             }
 
-            // test case 4: WaitAll() on a a group of tasks some of which throws an exception
-            //Debug.WriteLine("  > trying: WaitAll() on a a group of tasks some of which throws an exception");
+            // test case 4: WaitAll() on a group of tasks some of which throws an exception
+            //Debug.WriteLine("  > trying: WaitAll() on a group of tasks some of which throws an exception");
             DoRunTaskWaitAllTest(staThread, nFirstHalfCount, exceptionThrowAction, false, false, nSecondHalfCount, sleepAction, 5000, ref e);
 
             if (!(e is AggregateException) || ((e as AggregateException).InnerExceptions[0].Message != excpMsg))
@@ -1601,16 +1586,16 @@ namespace System.Threading.Tasks.Tests
                 {
                     cde.Signal(); // indicate that task has begun execution
                     Debug.WriteLine("Signalled");
-                    while (!mre.WaitOne(0)) ;
+                    mre.WaitOne();
                 }, CancellationToken.None, TaskCreationOptions.LongRunning, tm);
             }
             bool waitSucceeded = cde.Wait(5000);
-            foreach (Task task in tasks)
-                Debug.WriteLine("Status: " + task.Status);
-            int count = cde.CurrentCount;
-            int initialCount = cde.InitialCount;
             if (!waitSucceeded)
             {
+                foreach (Task task in tasks)
+                    Debug.WriteLine("Status: " + task.Status);
+                int count = cde.CurrentCount;
+                int initialCount = cde.InitialCount;
                 Debug.WriteLine("Wait failed. CDE.CurrentCount: {0}, CDE.Initial Count: {1}", count, initialCount);
                 Assert.True(false, string.Format("RunLongRunningTaskTests - TaskCreationOptions.LongRunning:    > FAILED.  Timed out waiting for tasks to start."));
             }
@@ -2518,7 +2503,7 @@ namespace System.Threading.Tasks.Tests
                     outerAggExp.InnerExceptions.Count != 1 ||
                     !(outerAggExp.InnerExceptions[0] is AggregateException))
                 {
-                    Assert.True(false, string.Format("RunTaskWaitTest:  > error: Wait on task with exceptional child threw an expception other than AggExp(AggExp(childsException))."));
+                    Assert.True(false, string.Format("RunTaskWaitTest:  > error: Wait on task with exceptional child threw an exception other than AggExp(AggExp(childsException))."));
                 }
 
                 innerAggExp = outerAggExp.InnerExceptions[0] as AggregateException;
@@ -2526,7 +2511,7 @@ namespace System.Threading.Tasks.Tests
                 if (innerAggExp.InnerExceptions.Count != 1 ||
                     innerAggExp.InnerExceptions[0].Message != exceptionMsg)
                 {
-                    Assert.True(false, string.Format("RunTaskWaitTest:  > error: Wait on task with exceptional child threw AggExp(AggExp(childsException)), but conatined wrong child exception."));
+                    Assert.True(false, string.Format("RunTaskWaitTest:  > error: Wait on task with exceptional child threw AggExp(AggExp(childsException)), but contained wrong child exception."));
                 }
             }
         }

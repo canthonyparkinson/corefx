@@ -46,7 +46,6 @@ namespace System.Security.AccessControl.Tests
 
         [Theory]
         [MemberData(nameof(CommonSecurityDescriptor_CreateFromRawSecurityDescriptor_TestData))]
-        [ActiveIssue(15)]
         public static void TestCreateFromRawSecurityDescriptor(bool isContainer, bool isDS, string rawSecurityDescriptorSddl, string verifierSddl)
         {
             RawSecurityDescriptor rawSecurityDescriptor = new RawSecurityDescriptor(rawSecurityDescriptorSddl);
@@ -56,7 +55,7 @@ namespace System.Security.AccessControl.Tests
             Assert.True((isContainer == commonSecurityDescriptor.IsContainer) && (isDS == commonSecurityDescriptor.IsDS));
 
             string resultSddlForm = commonSecurityDescriptor.GetSddlForm(AccessControlSections.All);
-            Assert.True(String.Compare(verifierSddl, resultSddlForm, StringComparison.CurrentCultureIgnoreCase) == 0);
+            Assert.True(string.Compare(verifierSddl, resultSddlForm, StringComparison.CurrentCultureIgnoreCase) == 0);
         }
     }
 }

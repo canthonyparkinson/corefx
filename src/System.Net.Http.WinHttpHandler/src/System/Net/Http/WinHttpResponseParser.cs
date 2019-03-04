@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Buffers;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -19,7 +20,7 @@ namespace System.Net.Http
 
         public static HttpResponseMessage CreateResponseMessage(
             WinHttpRequestState state,
-            bool doManualDecompressionCheck)
+            DecompressionMethods manuallyProcessedDecompressionMethods)
         {
             HttpRequestMessage request = state.RequestMessage;
             SafeWinHttpHandle requestHandle = state.RequestHandle;
@@ -32,71 +33,82 @@ namespace System.Net.Http
             // This buffer is the length needed for WINHTTP_QUERY_RAW_HEADERS_CRLF, which includes the status line
             // and all headers separated by CRLF, so it should be large enough for any individual status line or header queries.
             int bufferLength = GetResponseHeaderCharBufferLength(requestHandle, Interop.WinHttp.WINHTTP_QUERY_RAW_HEADERS_CRLF);
-            char[] buffer = new char[bufferLength];
-
-            // Get HTTP version, status code, reason phrase from the response headers.
-
-            int versionLength = GetResponseHeader(requestHandle, Interop.WinHttp.WINHTTP_QUERY_VERSION, buffer);
-            response.Version =
-                CharArrayHelpers.EqualsOrdinalAsciiIgnoreCase("HTTP/1.1", buffer, 0, versionLength) ? HttpVersion.Version11 :
-                CharArrayHelpers.EqualsOrdinalAsciiIgnoreCase("HTTP/1.0", buffer, 0, versionLength) ? HttpVersion.Version10 :
-                HttpVersion.Unknown;
-
-            response.StatusCode = (HttpStatusCode)GetResponseHeaderNumberInfo(
-                requestHandle,
-                Interop.WinHttp.WINHTTP_QUERY_STATUS_CODE);
-
-            int reasonPhraseLength = GetResponseHeader(requestHandle, Interop.WinHttp.WINHTTP_QUERY_STATUS_TEXT, buffer);
-            response.ReasonPhrase = reasonPhraseLength > 0 ?
-                GetReasonPhrase(response.StatusCode, buffer, reasonPhraseLength) :
-                string.Empty;
-
-            // Create response stream and wrap it in a StreamContent object.
-            var responseStream = new WinHttpResponseStream(requestHandle, state);
-            state.RequestHandle = null; // ownership successfully transfered to WinHttpResponseStram.
-            Stream decompressedStream = responseStream;
-
-            if (doManualDecompressionCheck)
+            char[] buffer = ArrayPool<char>.Shared.Rent(bufferLength);
+            try
             {
-                int contentEncodingStartIndex = 0;
-                int contentEncodingLength = GetResponseHeader(
-                    requestHandle,
-                    Interop.WinHttp.WINHTTP_QUERY_CONTENT_ENCODING,
-                    buffer);
+                // Get HTTP version, status code, reason phrase from the response headers.
 
-                CharArrayHelpers.Trim(buffer, ref contentEncodingStartIndex, ref contentEncodingLength);
-
-                if (contentEncodingLength > 0)
+                if (IsResponseHttp2(requestHandle))
                 {
-                    if (CharArrayHelpers.EqualsOrdinalAsciiIgnoreCase(
-                        EncodingNameGzip, buffer, contentEncodingStartIndex, contentEncodingLength))
+                    response.Version = WinHttpHandler.HttpVersion20;
+                }
+                else
+                {
+                    int versionLength = GetResponseHeader(requestHandle, Interop.WinHttp.WINHTTP_QUERY_VERSION, buffer);
+                    response.Version =
+                        CharArrayHelpers.EqualsOrdinalAsciiIgnoreCase("HTTP/1.1", buffer, 0, versionLength) ? HttpVersion.Version11 :
+                        CharArrayHelpers.EqualsOrdinalAsciiIgnoreCase("HTTP/1.0", buffer, 0, versionLength) ? HttpVersion.Version10 :
+                        WinHttpHandler.HttpVersionUnknown;
+                }
+
+                response.StatusCode = (HttpStatusCode)GetResponseHeaderNumberInfo(
+                    requestHandle,
+                    Interop.WinHttp.WINHTTP_QUERY_STATUS_CODE);
+
+                int reasonPhraseLength = GetResponseHeader(requestHandle, Interop.WinHttp.WINHTTP_QUERY_STATUS_TEXT, buffer);
+                response.ReasonPhrase = reasonPhraseLength > 0 ?
+                    GetReasonPhrase(response.StatusCode, buffer, reasonPhraseLength) :
+                    string.Empty;
+
+                // Create response stream and wrap it in a StreamContent object.
+                var responseStream = new WinHttpResponseStream(requestHandle, state);
+                state.RequestHandle = null; // ownership successfully transfered to WinHttpResponseStram.
+                Stream decompressedStream = responseStream;
+
+                if (manuallyProcessedDecompressionMethods != DecompressionMethods.None)
+                {
+                    int contentEncodingStartIndex = 0;
+                    int contentEncodingLength = GetResponseHeader(
+                        requestHandle,
+                        Interop.WinHttp.WINHTTP_QUERY_CONTENT_ENCODING,
+                        buffer);
+
+                    CharArrayHelpers.Trim(buffer, ref contentEncodingStartIndex, ref contentEncodingLength);
+
+                    if (contentEncodingLength > 0)
                     {
-                        decompressedStream = new GZipStream(responseStream, CompressionMode.Decompress);
-                        stripEncodingHeaders = true;
-                    }
-                    else if (CharArrayHelpers.EqualsOrdinalAsciiIgnoreCase(
-                        EncodingNameDeflate, buffer, contentEncodingStartIndex, contentEncodingLength))
-                    {
-                        decompressedStream = new DeflateStream(responseStream, CompressionMode.Decompress);
-                        stripEncodingHeaders = true;
+                        if ((manuallyProcessedDecompressionMethods & DecompressionMethods.GZip) == DecompressionMethods.GZip &&
+                            CharArrayHelpers.EqualsOrdinalAsciiIgnoreCase(EncodingNameGzip, buffer, contentEncodingStartIndex, contentEncodingLength))
+                        {
+                            decompressedStream = new GZipStream(responseStream, CompressionMode.Decompress);
+                            stripEncodingHeaders = true;
+                        }
+                        else if ((manuallyProcessedDecompressionMethods & DecompressionMethods.Deflate) == DecompressionMethods.Deflate &&
+                                 CharArrayHelpers.EqualsOrdinalAsciiIgnoreCase(EncodingNameDeflate, buffer, contentEncodingStartIndex, contentEncodingLength))
+                        {
+                            decompressedStream = new DeflateStream(responseStream, CompressionMode.Decompress);
+                            stripEncodingHeaders = true;
+                        }
                     }
                 }
+
+                response.Content = new NoWriteNoSeekStreamContent(decompressedStream);
+                response.RequestMessage = request;
+
+                // Parse raw response headers and place them into response message.
+                ParseResponseHeaders(requestHandle, response, buffer, stripEncodingHeaders);
+
+                if (response.RequestMessage.Method != HttpMethod.Head)
+                {
+                    state.ExpectedBytesToRead = response.Content.Headers.ContentLength;
+                }
+
+                return response;
             }
-
-            var content = new StreamContent(decompressedStream);
-
-            response.Content = content;
-            response.RequestMessage = request;
-
-            // Parse raw response headers and place them into response message.
-            ParseResponseHeaders(requestHandle, response, buffer, stripEncodingHeaders);
-
-            if (response.RequestMessage.Method != HttpMethod.Head)
+            finally
             {
-                state.ExpectedBytesToRead = response.Content.Headers.ContentLength;
+                ArrayPool<char>.Shared.Return(buffer);
             }
-
-            return response;
         }
 
         /// <summary>
@@ -115,13 +127,13 @@ namespace System.Net.Http
                 ref resultSize,
                 IntPtr.Zero))
             {
-                WinHttpException.ThrowExceptionUsingLastError();
+                WinHttpException.ThrowExceptionUsingLastError(nameof(Interop.WinHttp.WinHttpQueryHeaders));
             }
 
             return result;
         }
 
-        public unsafe static bool GetResponseHeader(
+        public static unsafe bool GetResponseHeader(
             SafeWinHttpHandle requestHandle,
             uint infoLevel,
             ref char[] buffer,
@@ -148,7 +160,7 @@ namespace System.Net.Http
             else
             {
                 bufferLength = buffer.Length;
-                fixed (char* pBuffer = buffer)
+                fixed (char* pBuffer = &buffer[0])
                 {
                     if (QueryHeaders(requestHandle, infoLevel, pBuffer, ref bufferLength, ref index))
                     {
@@ -177,13 +189,13 @@ namespace System.Net.Http
                 return GetResponseHeader(requestHandle, infoLevel, ref buffer, ref index, out headerValue);
             }
 
-            throw WinHttpException.CreateExceptionUsingError(lastError);
+            throw WinHttpException.CreateExceptionUsingError(lastError, nameof(Interop.WinHttp.WinHttpQueryHeaders));
         }
 
         /// <summary>
         /// Fills the buffer with the header value and returns the length, or returns 0 if the header isn't found.
         /// </summary>
-        private unsafe static int GetResponseHeader(SafeWinHttpHandle requestHandle, uint infoLevel, char[] buffer)
+        private static unsafe int GetResponseHeader(SafeWinHttpHandle requestHandle, uint infoLevel, char[] buffer)
         {
             Debug.Assert(buffer != null, "buffer must not be null.");
             Debug.Assert(buffer.Length > 0, "buffer must not be empty.");
@@ -191,7 +203,7 @@ namespace System.Net.Http
             int bufferLength = buffer.Length;
             uint index = 0;
 
-            fixed (char* pBuffer = buffer)
+            fixed (char* pBuffer = &buffer[0])
             {
                 if (!QueryHeaders(requestHandle, infoLevel, pBuffer, ref bufferLength, ref index))
                 {
@@ -204,7 +216,7 @@ namespace System.Net.Http
 
                     Debug.Assert(lastError != Interop.WinHttp.ERROR_INSUFFICIENT_BUFFER, "buffer must be of sufficient size.");
 
-                    throw WinHttpException.CreateExceptionUsingError(lastError);
+                    throw WinHttpException.CreateExceptionUsingError(lastError, nameof(Interop.WinHttp.WinHttpQueryHeaders));
                 }
             }
 
@@ -214,7 +226,7 @@ namespace System.Net.Http
         /// <summary>
         /// Returns the size of the char array buffer.
         /// </summary>
-        private unsafe static int GetResponseHeaderCharBufferLength(SafeWinHttpHandle requestHandle, uint infoLevel)
+        private static unsafe int GetResponseHeaderCharBufferLength(SafeWinHttpHandle requestHandle, uint infoLevel)
         {
             char* buffer = null;
             int bufferLength = 0;
@@ -228,14 +240,14 @@ namespace System.Net.Http
 
                 if (lastError != Interop.WinHttp.ERROR_INSUFFICIENT_BUFFER)
                 {
-                    throw WinHttpException.CreateExceptionUsingError(lastError);
+                    throw WinHttpException.CreateExceptionUsingError(lastError, nameof(Interop.WinHttp.WinHttpQueryHeaders));
                 }
             }
 
             return bufferLength;
         }
 
-        private unsafe static bool QueryHeaders(
+        private static unsafe bool QueryHeaders(
             SafeWinHttpHandle requestHandle,
             uint infoLevel,
             char* buffer,
@@ -321,6 +333,27 @@ namespace System.Net.Http
                     contentHeaders.TryAddWithoutValidation(headerName, headerValue);
                 }
             }
+        }
+
+        private static bool IsResponseHttp2(SafeWinHttpHandle requestHandle)
+        {
+            uint data = 0;
+            uint dataSize = sizeof(uint);
+
+            if (Interop.WinHttp.WinHttpQueryOption(
+                requestHandle,
+                Interop.WinHttp.WINHTTP_OPTION_HTTP_PROTOCOL_USED,
+                ref data,
+                ref dataSize))
+            {
+                if ((data & Interop.WinHttp.WINHTTP_PROTOCOL_FLAG_HTTP2) != 0)
+                {
+                    if (NetEventSource.IsEnabled) NetEventSource.Info(requestHandle, nameof(Interop.WinHttp.WINHTTP_PROTOCOL_FLAG_HTTP2));
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

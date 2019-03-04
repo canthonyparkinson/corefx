@@ -4,7 +4,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -12,6 +12,11 @@ namespace Internal.Cryptography.Pal
 {
     internal sealed partial class ChainPal
     {
+        public static IChainPal FromHandle(IntPtr chainContext)
+        {
+            throw new PlatformNotSupportedException();
+        }
+
         public static bool ReleaseSafeX509ChainHandle(IntPtr handle)
         {
             return true;
@@ -43,61 +48,69 @@ namespace Internal.Cryptography.Pal
                 verificationTime = verificationTime.ToLocalTime();
             }
 
-            TimeSpan remainingDownloadTime = timeout;
-            var leaf = new X509Certificate2(cert.Handle);
-            var downloaded = new HashSet<X509Certificate2>();
-            var systemTrusted = new HashSet<X509Certificate2>();
-
-            HashSet<X509Certificate2> candidates = OpenSslX509ChainProcessor.FindCandidates(
-                leaf,
-                extraStore,
-                downloaded,
-                systemTrusted,
-                ref remainingDownloadTime);
-
-            IChainPal chain = OpenSslX509ChainProcessor.BuildChain(
-                leaf,
-                candidates,
-                downloaded,
-                systemTrusted,
-                applicationPolicy,
-                certificatePolicy,
-                revocationMode,
-                revocationFlag,
-                verificationTime,
-                ref remainingDownloadTime);
-
-            if (chain.ChainStatus.Length == 0 && downloaded.Count > 0)
+            // Until we support the Disallowed store, ensure it's empty (which is done by the ctor)
+            using (new X509Store(StoreName.Disallowed, StoreLocation.CurrentUser, OpenFlags.ReadOnly))
             {
-                SaveIntermediateCertificates(chain.ChainElements, downloaded);
             }
 
-            return chain;
-        }
+            TimeSpan remainingDownloadTime = timeout;
 
-        private static void SaveIntermediateCertificates(
-            X509ChainElement[] chainElements,
-            HashSet<X509Certificate2> downloaded)
-        {
-            List<X509Certificate2> chainDownloaded = new List<X509Certificate2>(chainElements.Length);
+            OpenSslX509ChainProcessor chainPal = OpenSslX509ChainProcessor.InitiateChain(
+                ((OpenSslX509CertificateReader)cert).SafeHandle,
+                verificationTime,
+                remainingDownloadTime);
 
-            // It should be very unlikely that we would have downloaded something, the chain succeed,
-            // and the thing we downloaded not being a part of the chain, but safer is better.
-            for (int i = 0; i < chainElements.Length; i++)
+            Interop.Crypto.X509VerifyStatusCode status = chainPal.FindFirstChain(extraStore);
+
+            if (!OpenSslX509ChainProcessor.IsCompleteChain(status))
             {
-                X509Certificate2 elementCert = chainElements[i].Certificate;
+                List<X509Certificate2> tmp = null;
+                status = chainPal.FindChainViaAia(ref tmp);
 
-                if (downloaded.Contains(elementCert))
+                if (tmp != null)
                 {
-                    chainDownloaded.Add(elementCert);
+                    if (status == Interop.Crypto.X509VerifyStatusCode.X509_V_OK)
+                    {
+                        SaveIntermediateCertificates(tmp);
+                    }
+
+                    foreach (X509Certificate2 downloaded in tmp)
+                    {
+                        downloaded.Dispose();
+                    }
                 }
             }
 
-            if (chainDownloaded.Count == 0)
+            if (revocationMode == X509RevocationMode.Online &&
+                status != Interop.Crypto.X509VerifyStatusCode.X509_V_OK)
             {
-                return;
+                revocationMode = X509RevocationMode.Offline;
             }
 
+            // In NoCheck+OK then we don't need to build the chain any more, we already
+            // know it's error-free.  So skip straight to finish.
+            if (status != Interop.Crypto.X509VerifyStatusCode.X509_V_OK ||
+                revocationMode != X509RevocationMode.NoCheck)
+            {
+                chainPal.CommitToChain();
+                chainPal.ProcessRevocation(revocationMode, revocationFlag);
+            }
+
+            chainPal.Finish(applicationPolicy, certificatePolicy);
+
+#if DEBUG
+            if (chainPal.ChainElements.Length > 0)
+            {
+                X509Certificate2 reportedLeaf = chainPal.ChainElements[0].Certificate;
+                Debug.Assert(reportedLeaf != null, "reportedLeaf != null");
+                Debug.Assert(!ReferenceEquals(cert, reportedLeaf.Pal), "!ReferenceEquals(cert, reportedLeaf.Pal)");
+            }
+#endif
+            return chainPal;
+        }
+
+        private static void SaveIntermediateCertificates(List<X509Certificate2> downloadedCerts)
+        {
             using (var userIntermediate = new X509Store(StoreName.CertificateAuthority, StoreLocation.CurrentUser))
             {
                 try
@@ -110,17 +123,13 @@ namespace Internal.Cryptography.Pal
                     return;
                 }
 
-                foreach (X509Certificate2 cert in chainDownloaded)
+                foreach (X509Certificate2 cert in downloadedCerts)
                 {
                     try
                     {
                         userIntermediate.Add(cert);
                     }
-                    catch (CryptographicException)
-                    {
-                        // Saving is opportunistic, just ignore failures
-                    }
-                    catch (IOException)
+                    catch
                     {
                         // Saving is opportunistic, just ignore failures
                     }

@@ -2,15 +2,25 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
+using System.Runtime.Serialization;
 
 namespace System.Net.WebSockets
 {
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public sealed class WebSocketException : Win32Exception
     {
         private readonly WebSocketError _webSocketErrorCode;
+
+        [SuppressMessage("Microsoft.Security", "CA2122:DoNotIndirectlyExposeMethodsWithLinkDemands",
+           Justification = "This ctor is harmless, because it does not pass arbitrary data into the native code.")]
+        public WebSocketException()
+            : this(Marshal.GetLastWin32Error())
+        {
+        }
 
         [SuppressMessage("Microsoft.Security", "CA2122:DoNotIndirectlyExposeMethodsWithLinkDemands",
             Justification = "This ctor is harmless, because it does not pass arbitrary data into the native code.")]
@@ -114,7 +124,18 @@ namespace System.Net.WebSockets
         {
         }
 
-        public int ErrorCode
+        private WebSocketException(SerializationInfo serializationInfo, StreamingContext streamingContext)
+            : base(serializationInfo, streamingContext)
+        {
+        }
+
+        public override void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            base.GetObjectData(info, context);
+            info.AddValue(nameof(WebSocketErrorCode), _webSocketErrorCode);
+        }
+
+        public override int ErrorCode
         {
             get
             {
@@ -137,8 +158,8 @@ namespace System.Net.WebSockets
             {
                 case WebSocketError.InvalidMessageType:
                     return SR.Format(SR.net_WebSockets_InvalidMessageType_Generic,
-                        typeof(WebSocket).Name + "CloseAsync",
-                        typeof(WebSocket).Name + "CloseOutputAsync");
+                        $"{nameof(WebSocket)}.{nameof(WebSocket.CloseAsync)}",
+                        $"{nameof(WebSocket)}.{nameof(WebSocket.CloseOutputAsync)}");
                 case WebSocketError.Faulted:
                     return SR.net_Websockets_WebSocketBaseFaulted;
                 case WebSocketError.NotAWebSocket:
@@ -162,7 +183,10 @@ namespace System.Net.WebSockets
         // as the Exception..ctor() throws on setting HResult to 0. The default for HResult is -2147467259.
         private void SetErrorCodeOnError(int nativeError)
         {
-            HResult = nativeError;
+            if (!Succeeded(nativeError))
+            {
+                HResult = nativeError;
+            }
         }
 
         private static bool Succeeded(int hr)

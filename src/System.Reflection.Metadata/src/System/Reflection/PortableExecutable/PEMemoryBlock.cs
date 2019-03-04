@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 
 namespace System.Reflection.PortableExecutable
 {
-    public struct PEMemoryBlock
+    public readonly struct PEMemoryBlock
     {
         private readonly AbstractMemoryBlock _block;
         private readonly int _offset;
@@ -18,7 +18,7 @@ namespace System.Reflection.PortableExecutable
         internal PEMemoryBlock(AbstractMemoryBlock block, int offset = 0)
         {
             Debug.Assert(block != null);
-            Debug.Assert(offset >= 0 && offset < block.Size);
+            Debug.Assert(offset >= 0 && offset <= block.Size);
 
             _block = block;
             _offset = offset;
@@ -64,7 +64,7 @@ namespace System.Reflection.PortableExecutable
         /// Reads the content of a part of the block into an array.
         /// </summary>
         /// <exception cref="ArgumentOutOfRangeException">Specified range is not contained within the block.</exception>
-        public unsafe ImmutableArray<byte> GetContent(int start, int length)
+        public ImmutableArray<byte> GetContent(int start, int length)
         {
             BlobUtilities.ValidateRange(Length, start, length, nameof(length));
             return _block?.GetContentUnchecked(_offset + start, length) ?? ImmutableArray<byte>.Empty;

@@ -6,10 +6,12 @@ using System.Diagnostics;
 
 namespace System.Reflection.Metadata.Ecma335
 {
-    public struct LabelHandle : IEquatable<LabelHandle>
+    public readonly struct LabelHandle : IEquatable<LabelHandle>
     {
-        // 1-based
-        internal readonly int Id;
+        /// <summary>
+        /// 1-based id identifying the label within the context of a <see cref="ControlFlowBuilder"/>.
+        /// </summary>
+        public int Id { get; }
 
         internal LabelHandle(int id)
         {

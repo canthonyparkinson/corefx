@@ -4,13 +4,9 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Net.Test.Common;
-using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 
 using Xunit;
-using Xunit.Abstractions;
 
 namespace System.Net.Sockets.Tests
 {
@@ -29,7 +25,7 @@ namespace System.Net.Sockets.Tests
         public void Select_Read_NotASocket_Throws()
         {
             var list = new List<object> { new object() };
-            Assert.Throws<ArgumentException>(() => Socket.Select(list, null, null, SelectSuccessTimeoutMicroseconds));
+            AssertExtensions.Throws<ArgumentException>("socketList", () => Socket.Select(list, null, null, SelectSuccessTimeoutMicroseconds));
         }
 
         [Fact]
@@ -41,7 +37,7 @@ namespace System.Net.Sockets.Tests
                 int receiverPort = receiver.BindToAnonymousPort(IPAddress.Loopback);
                 var receiverEndpoint = new IPEndPoint(IPAddress.Loopback, receiverPort);
 
-                for (int i = 0; i < Configuration.UDPRedundancy; i++)
+                for (int i = 0; i < TestSettings.UDPRedundancy; i++)
                 {
                     sender.SendTo(new byte[1], SocketFlags.None, receiverEndpoint);
                 }
@@ -81,7 +77,7 @@ namespace System.Net.Sockets.Tests
                 int secondReceiverPort = secondReceiver.BindToAnonymousPort(IPAddress.Loopback);
                 var secondReceiverEndpoint = new IPEndPoint(IPAddress.Loopback, secondReceiverPort);
 
-                for (int i = 0; i < Configuration.UDPRedundancy; i++)
+                for (int i = 0; i < TestSettings.UDPRedundancy; i++)
                 {
                     sender.SendTo(new byte[1], SocketFlags.None, firstReceiverEndpoint);
                     sender.SendTo(new byte[1], SocketFlags.None, secondReceiverEndpoint);
@@ -132,7 +128,7 @@ namespace System.Net.Sockets.Tests
                 int secondReceiverPort = secondReceiver.BindToAnonymousPort(IPAddress.Loopback);
                 var secondReceiverEndpoint = new IPEndPoint(IPAddress.Loopback, secondReceiverPort);
 
-                for (int i = 0; i < Configuration.UDPRedundancy; i++)
+                for (int i = 0; i < TestSettings.UDPRedundancy; i++)
                 {
                     sender.SendTo(new byte[1], SocketFlags.None, secondReceiverEndpoint);
                 }
@@ -149,7 +145,7 @@ namespace System.Net.Sockets.Tests
         public void Select_Write_NotASocket_Throws()
         {
             var list = new List<object> { new object() };
-            Assert.Throws<ArgumentException>(() => Socket.Select(null, list, null, SelectSuccessTimeoutMicroseconds));
+            AssertExtensions.Throws<ArgumentException>("socketList", () => Socket.Select(null, list, null, SelectSuccessTimeoutMicroseconds));
         }
 
         [Fact]
@@ -239,7 +235,7 @@ namespace System.Net.Sockets.Tests
         public void Select_Error_NotASocket_Throws()
         {
             var list = new List<object> { new object() };
-            Assert.Throws<ArgumentException>(() => Socket.Select(null, null, list, SelectSuccessTimeoutMicroseconds));
+            AssertExtensions.Throws<ArgumentException>("socketList", () => Socket.Select(null, null, list, SelectSuccessTimeoutMicroseconds));
         }
 
         [Fact]
@@ -281,7 +277,7 @@ namespace System.Net.Sockets.Tests
                 int receiverPort = receiver.BindToAnonymousPort(IPAddress.Loopback);
                 var receiverEndpoint = new IPEndPoint(IPAddress.Loopback, receiverPort);
 
-                for (int i = 0; i < Configuration.UDPRedundancy; i++)
+                for (int i = 0; i < TestSettings.UDPRedundancy; i++)
                 {
                     sender.SendTo(new byte[1], SocketFlags.None, receiverEndpoint);
                 }

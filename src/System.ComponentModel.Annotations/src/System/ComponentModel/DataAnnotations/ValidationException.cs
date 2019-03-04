@@ -2,11 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Runtime.Serialization;
+
 namespace System.ComponentModel.DataAnnotations
 {
     /// <summary>
     ///     Exception used for validation using <see cref="ValidationAttribute" />.
     /// </summary>
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.ComponentModel.DataAnnotations, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35")]
     public class ValidationException : Exception
     {
         private ValidationResult _validationResult;
@@ -42,7 +46,6 @@ namespace System.ComponentModel.DataAnnotations
         /// </summary>
         /// <remarks>The long form of this constructor is preferred because it gives better error reporting.</remarks>
         public ValidationException()
-            : base()
         {
         }
 
@@ -68,9 +71,19 @@ namespace System.ComponentModel.DataAnnotations
         }
 
         /// <summary>
+        ///     Constructor that takes a SerializationInfo.
+        /// </summary>
+        /// <param name="info">The SerializationInfo.</param>
+        /// <param name="context">The StreamingContext.</param>
+        protected ValidationException(SerializationInfo info, StreamingContext context)
+            : base(info, context)
+        {
+        }
+
+        /// <summary>
         ///     Gets the <see>ValidationAttribute</see> instance that triggered this exception.
         /// </summary>
-        public ValidationAttribute ValidationAttribute { get; private set; }
+        public ValidationAttribute ValidationAttribute { get; }
 
         /// <summary>
         ///     Gets the <see cref="ValidationResult" /> instance that describes the validation error.
@@ -78,21 +91,12 @@ namespace System.ComponentModel.DataAnnotations
         /// <value>
         ///     This property will never be null.
         /// </value>
-        public ValidationResult ValidationResult
-        {
-            get
-            {
-                if (_validationResult == null)
-                {
-                    _validationResult = new ValidationResult(Message);
-                }
-                return _validationResult;
-            }
-        }
+        public ValidationResult ValidationResult =>
+            _validationResult ?? (_validationResult = new ValidationResult(Message));
 
         /// <summary>
         ///     Gets the value that caused the validating attribute to trigger the exception
         /// </summary>
-        public object Value { get; private set; }
+        public object Value { get; }
     }
 }

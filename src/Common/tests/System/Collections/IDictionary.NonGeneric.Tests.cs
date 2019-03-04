@@ -12,7 +12,7 @@ namespace System.Collections.Tests
     /// Contains tests that ensure the correctness of any class that implements the nongeneric
     /// IDictionary interface
     /// </summary>
-    public abstract class IDictionary_NonGeneric_Tests : ICollection_NonGeneric_Tests
+    public abstract partial class IDictionary_NonGeneric_Tests : ICollection_NonGeneric_Tests
     {
         #region IDictionary Helper Methods
 
@@ -128,31 +128,45 @@ namespace System.Collections.Tests
         /// <summary>
         /// Returns a set of ModifyEnumerable delegates that modify the enumerable passed to them.
         /// </summary>
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations)
         {
-            get
+            if ((operations & ModifyOperation.Add) == ModifyOperation.Add)
             {
-                yield return (IEnumerable enumerable) => {
+                yield return (IEnumerable enumerable) =>
+                {
                     IDictionary casted = ((IDictionary)enumerable);
                     casted.Add(CreateTKey(12), CreateTValue(5123));
                     return true;
                 };
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Insert) == ModifyOperation.Insert)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     IDictionary casted = ((IDictionary)enumerable);
                     casted[CreateTKey(541)] = CreateTValue(12);
                     return true;
                 };
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Remove) == ModifyOperation.Remove)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     IDictionary casted = ((IDictionary)enumerable);
                     if (casted.Count > 0)
                     {
                         var keys = casted.Keys.GetEnumerator();
                         keys.MoveNext();
-                        casted.Remove(keys.Current); return true;
+                        casted.Remove(keys.Current);
+                        return true;
                     }
                     return false;
                 };
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Clear) == ModifyOperation.Clear)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     IDictionary casted = ((IDictionary)enumerable);
                     if (casted.Count > 0)
                     {
@@ -401,7 +415,7 @@ namespace System.Collections.Tests
             foreach (DictionaryEntry pair in dictionary)
                 entries.Add(pair);
             foreach (DictionaryEntry pair in entries)
-            {  
+            {
                 object missingKey = GetNewKey(dictionary);
                 dictionary.Add(missingKey, (pair.Value));
             }
@@ -780,7 +794,7 @@ namespace System.Collections.Tests
         [MemberData(nameof(ValidCollectionSizes))]
         public virtual void IDictionary_NonGeneric_IDictionaryEnumerator_Current_ModifiedDuringEnumeration_UndefinedBehavior(int count)
         {
-            Assert.All(ModifyEnumerables, ModifyEnumerable =>
+            Assert.All(GetModifyEnumerables(ModifyEnumeratorThrows), ModifyEnumerable =>
             {
                 object current, key, value, entry;
                 IDictionary enumerable = NonGenericIDictionaryFactory(count);

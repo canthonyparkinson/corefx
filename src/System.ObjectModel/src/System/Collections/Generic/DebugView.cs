@@ -2,9 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Diagnostics;
-using System.Diagnostics.Contracts;
 
 namespace System.Collections.Generic
 {
@@ -14,10 +12,7 @@ namespace System.Collections.Generic
 
         public CollectionDebugView(ICollection<T> collection)
         {
-            if (collection == null)
-                throw new ArgumentNullException(nameof(collection));
-
-            _collection = collection;
+            _collection = collection ?? throw new ArgumentNullException(nameof(collection));
         }
 
         [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
@@ -38,10 +33,7 @@ namespace System.Collections.Generic
 
         public DictionaryDebugView(IDictionary<K, V> dictionary)
         {
-            if (dictionary == null)
-                throw new ArgumentNullException("collection");
-
-            _dict = dictionary;
+            _dict = dictionary ?? throw new ArgumentNullException(nameof(dictionary));
         }
 
         [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
@@ -56,4 +48,3 @@ namespace System.Collections.Generic
         }
     }
 }
-

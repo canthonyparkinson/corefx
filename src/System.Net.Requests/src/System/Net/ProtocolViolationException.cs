@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Runtime.Serialization;
+
 namespace System.Net
 {
     /// <devdoc>
@@ -10,7 +12,9 @@ namespace System.Net
     ///       protocol.
     ///    </para>
     /// </devdoc>
-    public class ProtocolViolationException : InvalidOperationException
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
+    public class ProtocolViolationException : InvalidOperationException, ISerializable
     {
         /// <devdoc>
         ///    <para>
@@ -29,6 +33,21 @@ namespace System.Net
         /// </devdoc>
         public ProtocolViolationException(string message) : base(message)
         {
+        }
+
+        protected ProtocolViolationException(SerializationInfo serializationInfo, StreamingContext streamingContext)
+            : base(serializationInfo, streamingContext)
+        {
+        }
+
+        void ISerializable.GetObjectData(SerializationInfo serializationInfo, StreamingContext streamingContext)
+        {
+            base.GetObjectData(serializationInfo, streamingContext);
+        }
+
+        public override void GetObjectData(SerializationInfo serializationInfo, StreamingContext streamingContext)
+        {
+            base.GetObjectData(serializationInfo, streamingContext);
         }
     }
 }

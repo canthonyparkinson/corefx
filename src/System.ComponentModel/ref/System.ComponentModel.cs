@@ -5,7 +5,6 @@
 // Changes to this file must follow the http://aka.ms/api-review process.
 // ------------------------------------------------------------------------------
 
-
 namespace System
 {
     public partial interface IServiceProvider
@@ -19,7 +18,7 @@ namespace System.ComponentModel
     {
         public CancelEventArgs() { }
         public CancelEventArgs(bool cancel) { }
-        public bool Cancel { get { return default(bool); } set { } }
+        public bool Cancel { get { throw null; } set { } }
     }
     public partial interface IChangeTracking
     {

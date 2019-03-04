@@ -13,13 +13,14 @@ using System.Xml;
 using System.Collections.Generic;
 using System.Xml.Serialization;
 using System.Security;
-#if !NET_NATIVE
+using System.Runtime.CompilerServices;
+#if !uapaot
 using ExtensionDataObject = System.Object;
 #endif
 
 namespace System.Runtime.Serialization
 {
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
     public class XmlObjectSerializerWriteContext : XmlObjectSerializerContext
 #else
     internal class XmlObjectSerializerWriteContext : XmlObjectSerializerContext
@@ -56,7 +57,7 @@ namespace System.Runtime.Serialization
             _unsafeTypeForwardingEnabled = true;
         }
 
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
         internal ObjectToIdCache SerializedObjects
 #else
         protected ObjectToIdCache SerializedObjects
@@ -93,6 +94,11 @@ namespace System.Runtime.Serialization
 #endif
         {
             _isGetOnlyCollection = true;
+        }
+
+        internal void ResetIsGetOnlyCollection()
+        {
+            _isGetOnlyCollection = false;
         }
 
 #if USE_REFEMIT
@@ -160,7 +166,7 @@ namespace System.Runtime.Serialization
             bool verifyKnownType = false;
             Type declaredType = rootTypeDataContract.UnderlyingType;
 
-            if (declaredType.GetTypeInfo().IsInterface && CollectionDataContract.IsCollectionInterface(declaredType))
+            if (declaredType.IsInterface && CollectionDataContract.IsCollectionInterface(declaredType))
             {
                 if (DataContractResolver != null)
                 {
@@ -177,18 +183,16 @@ namespace System.Runtime.Serialization
         protected virtual void SerializeWithXsiType(XmlWriterDelegator xmlWriter, object obj, RuntimeTypeHandle objectTypeHandle, Type objectType, int declaredTypeID, RuntimeTypeHandle declaredTypeHandle, Type declaredType)
         {
             bool verifyKnownType = false;
-#if !NET_NATIVE
             DataContract dataContract;
-            if (declaredType.GetTypeInfo().IsInterface && CollectionDataContract.IsCollectionInterface(declaredType))
+            if (declaredType.IsInterface && CollectionDataContract.IsCollectionInterface(declaredType))
             {
+#if !uapaot
                 dataContract = GetDataContractSkipValidation(DataContract.GetId(objectTypeHandle), objectTypeHandle, objectType);
                 if (OnHandleIsReference(xmlWriter, dataContract, obj))
                     return;
                 dataContract = GetDataContract(declaredTypeHandle, declaredType);
 #else
-            DataContract dataContract = DataContract.GetDataContractFromGeneratedAssembly(declaredType);
-            if (dataContract.TypeIsInterface && dataContract.TypeIsCollectionInterface)
-            {
+                dataContract = DataContract.GetDataContract(declaredType);
                 if (OnHandleIsReference(xmlWriter, dataContract, obj))
                     return;
                 if (this.Mode == SerializationMode.SharedType && dataContract.IsValidContract(this.Mode))
@@ -232,7 +236,7 @@ namespace System.Runtime.Serialization
 
         internal bool OnHandleIsReference(XmlWriterDelegator xmlWriter, DataContract contract, object obj)
         {
-            if (!contract.IsReference || _isGetOnlyCollection)
+            if (preserveObjectReferences || !contract.IsReference || _isGetOnlyCollection)
             {
                 return false;
             }
@@ -262,12 +266,12 @@ namespace System.Runtime.Serialization
                 knownTypesAddedInCurrentScope = true;
             }
 
-#if !NET_NATIVE
+#if !uapaot
             if (verifyKnownType)
             {
                 if (!IsKnownType(dataContract, declaredType))
                 {
-                    DataContract knownContract = ResolveDataContractFromKnownTypes(dataContract.StableName.Name, dataContract.StableName.Namespace, null /*memberTypeContract*/);
+                    DataContract knownContract = ResolveDataContractFromKnownTypes(dataContract.StableName.Name, dataContract.StableName.Namespace, null /*memberTypeContract*/, declaredType);
                     if (knownContract == null || knownContract.UnderlyingType != dataContract.UnderlyingType)
                     {
                         throw DiagnosticUtility.ExceptionUtility.ThrowHelperError(XmlObjectSerializer.CreateSerializationException(SR.Format(SR.DcTypeNotFoundOnSerialize, DataContract.GetClrTypeFullName(dataContract.UnderlyingType), dataContract.StableName.Name, dataContract.StableName.Namespace)));
@@ -298,7 +302,12 @@ namespace System.Runtime.Serialization
             return false;
         }
 
-#if USE_REFEMIT || NET_NATIVE
+        internal virtual bool WriteClrTypeInfo(XmlWriterDelegator xmlWriter, Type dataContractType, SerializationInfo serInfo)
+        {
+            return false;
+        }
+
+#if USE_REFEMIT || uapaot
         public virtual void WriteAnyType(XmlWriterDelegator xmlWriter, object value)
 #else
         internal virtual void WriteAnyType(XmlWriterDelegator xmlWriter, object value)
@@ -307,7 +316,7 @@ namespace System.Runtime.Serialization
             xmlWriter.WriteAnyType(value);
         }
 
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
         public virtual void WriteString(XmlWriterDelegator xmlWriter, string value)
 #else
         internal virtual void WriteString(XmlWriterDelegator xmlWriter, string value)
@@ -315,7 +324,7 @@ namespace System.Runtime.Serialization
         {
             xmlWriter.WriteString(value);
         }
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
         public virtual void WriteString(XmlWriterDelegator xmlWriter, string value, XmlDictionaryString name, XmlDictionaryString ns)
 #else
         internal virtual void WriteString(XmlWriterDelegator xmlWriter, string value, XmlDictionaryString name, XmlDictionaryString ns)
@@ -331,7 +340,7 @@ namespace System.Runtime.Serialization
             }
         }
 
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
         public virtual void WriteBase64(XmlWriterDelegator xmlWriter, byte[] value)
 #else
         internal virtual void WriteBase64(XmlWriterDelegator xmlWriter, byte[] value)
@@ -339,7 +348,7 @@ namespace System.Runtime.Serialization
         {
             xmlWriter.WriteBase64(value);
         }
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
         public virtual void WriteBase64(XmlWriterDelegator xmlWriter, byte[] value, XmlDictionaryString name, XmlDictionaryString ns)
 #else
         internal virtual void WriteBase64(XmlWriterDelegator xmlWriter, byte[] value, XmlDictionaryString name, XmlDictionaryString ns)
@@ -355,7 +364,7 @@ namespace System.Runtime.Serialization
             }
         }
 
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
         public virtual void WriteUri(XmlWriterDelegator xmlWriter, Uri value)
 #else
         internal virtual void WriteUri(XmlWriterDelegator xmlWriter, Uri value)
@@ -363,7 +372,7 @@ namespace System.Runtime.Serialization
         {
             xmlWriter.WriteUri(value);
         }
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
         public virtual void WriteUri(XmlWriterDelegator xmlWriter, Uri value, XmlDictionaryString name, XmlDictionaryString ns)
 #else
         internal virtual void WriteUri(XmlWriterDelegator xmlWriter, Uri value, XmlDictionaryString name, XmlDictionaryString ns)
@@ -379,7 +388,7 @@ namespace System.Runtime.Serialization
             }
         }
 
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
         public virtual void WriteQName(XmlWriterDelegator xmlWriter, XmlQualifiedName value)
 #else
         internal virtual void WriteQName(XmlWriterDelegator xmlWriter, XmlQualifiedName value)
@@ -387,7 +396,7 @@ namespace System.Runtime.Serialization
         {
             xmlWriter.WriteQName(value);
         }
-#if USE_REFEMIT || NET_NATIVE
+#if USE_REFEMIT || uapaot
         public virtual void WriteQName(XmlWriterDelegator xmlWriter, XmlQualifiedName value, XmlDictionaryString name, XmlDictionaryString ns)
 #else
         internal virtual void WriteQName(XmlWriterDelegator xmlWriter, XmlQualifiedName value, XmlDictionaryString name, XmlDictionaryString ns)
@@ -409,6 +418,11 @@ namespace System.Runtime.Serialization
         internal void HandleGraphAtTopLevel(XmlWriterDelegator writer, object obj, DataContract contract)
         {
             writer.WriteXmlnsAttribute(Globals.XsiPrefix, DictionaryGlobals.SchemaInstanceNamespace);
+            if (contract.IsISerializable)
+            {
+                writer.WriteXmlnsAttribute(Globals.XsdPrefix, DictionaryGlobals.SchemaNamespace);
+            }
+
             OnHandleReference(writer, obj, true /*canContainReferences*/);
         }
 
@@ -574,7 +588,66 @@ namespace System.Runtime.Serialization
             xmlSerializableWriter.EndWrite();
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal void GetObjectData(ISerializable obj, SerializationInfo serInfo, StreamingContext context)
+        {
+            obj.GetObjectData(serInfo, context);
+        }
 
+        public void WriteISerializable(XmlWriterDelegator xmlWriter, ISerializable obj)
+        {
+            Type objType = obj.GetType();
+            var serInfo = new SerializationInfo(objType, XmlObjectSerializer.FormatterConverter /*!UnsafeTypeForwardingEnabled is always false*/);
+            GetObjectData(obj, serInfo, GetStreamingContext());
+
+            if (!UnsafeTypeForwardingEnabled && serInfo.AssemblyName == Globals.MscorlibAssemblyName)
+            {
+                // Throw if a malicious type tries to set its assembly name to "0" to get deserialized in mscorlib
+                throw DiagnosticUtility.ExceptionUtility.ThrowHelperError(XmlObjectSerializer.CreateSerializationException(SR.Format(SR.ISerializableAssemblyNameSetToZero, DataContract.GetClrTypeFullName(obj.GetType()))));
+            }
+
+            WriteSerializationInfo(xmlWriter, objType, serInfo);
+        }
+
+        internal void WriteSerializationInfo(XmlWriterDelegator xmlWriter, Type objType, SerializationInfo serInfo)
+        {
+            if (DataContract.GetClrTypeFullName(objType) != serInfo.FullTypeName)
+            {
+                if (DataContractResolver != null)
+                {
+                    XmlDictionaryString typeName, typeNs;
+                    if (ResolveType(serInfo.ObjectType, objType, out typeName, out typeNs))
+                    {
+                        xmlWriter.WriteAttributeQualifiedName(Globals.SerPrefix, DictionaryGlobals.ISerializableFactoryTypeLocalName, DictionaryGlobals.SerializationNamespace, typeName, typeNs);
+                    }
+                }
+                else
+                {
+                    string typeName, typeNs;
+                    DataContract.GetDefaultStableName(serInfo.FullTypeName, out typeName, out typeNs);
+                    xmlWriter.WriteAttributeQualifiedName(Globals.SerPrefix, DictionaryGlobals.ISerializableFactoryTypeLocalName, DictionaryGlobals.SerializationNamespace, DataContract.GetClrTypeString(typeName), DataContract.GetClrTypeString(typeNs));
+                }
+            }
+
+            WriteClrTypeInfo(xmlWriter, objType, serInfo);
+            IncrementItemCount(serInfo.MemberCount);
+            foreach (SerializationEntry serEntry in serInfo)
+            {
+                XmlDictionaryString name = DataContract.GetClrTypeString(DataContract.EncodeLocalName(serEntry.Name));
+                xmlWriter.WriteStartElement(name, DictionaryGlobals.EmptyString);
+                object obj = serEntry.Value;
+                if (obj == null)
+                {
+                    WriteNull(xmlWriter);
+                }
+                else
+                {
+                    InternalSerializeReference(xmlWriter, obj, false /*isDeclaredType*/, false /*writeXsiType*/, -1, Globals.TypeOfObject.TypeHandle);
+                }
+
+                xmlWriter.WriteEndElement();
+            }
+        }
 
         protected virtual void WriteDataContractValue(DataContract dataContract, XmlWriterDelegator xmlWriter, object obj, RuntimeTypeHandle declaredTypeHandle)
         {
@@ -621,20 +694,20 @@ namespace System.Runtime.Serialization
 
         protected virtual bool WriteTypeInfo(XmlWriterDelegator writer, DataContract contract, DataContract declaredContract)
         {
-            if (XmlObjectSerializer.IsContractDeclared(contract, declaredContract))
+            if (!XmlObjectSerializer.IsContractDeclared(contract, declaredContract))
             {
-                return false;
+                if (DataContractResolver == null)
+                {
+                    WriteTypeInfo(writer, contract.Name, contract.Namespace);
+                    return true;
+                }
+                else
+                {
+                    WriteResolvedTypeInfo(writer, contract.OriginalUnderlyingType, declaredContract.OriginalUnderlyingType);
+                    return false;
+                }
             }
-            bool hasResolver = DataContractResolver != null;
-            if (hasResolver)
-            {
-                WriteResolvedTypeInfo(writer, contract.UnderlyingType, declaredContract.UnderlyingType);
-            }
-            else
-            {
-                WriteTypeInfo(writer, contract.Name, contract.Namespace);
-            }
-            return hasResolver;
+            return false;
         }
 
         protected virtual void WriteTypeInfo(XmlWriterDelegator writer, string dataContractName, string dataContractNamespace)
@@ -647,11 +720,173 @@ namespace System.Runtime.Serialization
             writer.WriteAttributeQualifiedName(Globals.XsiPrefix, DictionaryGlobals.XsiTypeLocalName, DictionaryGlobals.SchemaInstanceNamespace, dataContractName, dataContractNamespace);
         }
 
-#if !NET_NATIVE
         public void WriteExtensionData(XmlWriterDelegator xmlWriter, ExtensionDataObject extensionData, int memberIndex)
         {
-            // Needed by the code generator, but not called. 
+            if (IgnoreExtensionDataObject || extensionData == null)
+                return;
+
+            IList<ExtensionDataMember> members = extensionData.Members;
+            if (members != null)
+            {
+                for (int i = 0; i < extensionData.Members.Count; i++)
+                {
+                    ExtensionDataMember member = extensionData.Members[i];
+                    if (member.MemberIndex == memberIndex)
+                    {
+                        WriteExtensionDataMember(xmlWriter, member);
+                    }
+                }
+            }
         }
-#endif
+
+        private void WriteExtensionDataMember(XmlWriterDelegator xmlWriter, ExtensionDataMember member)
+        {
+            xmlWriter.WriteStartElement(member.Name, member.Namespace);
+            IDataNode dataNode = member.Value;
+            WriteExtensionDataValue(xmlWriter, dataNode);
+            xmlWriter.WriteEndElement();
+        }
+
+        internal virtual void WriteExtensionDataTypeInfo(XmlWriterDelegator xmlWriter, IDataNode dataNode)
+        {
+            if (dataNode.DataContractName != null)
+                WriteTypeInfo(xmlWriter, dataNode.DataContractName, dataNode.DataContractNamespace);
+
+            WriteClrTypeInfo(xmlWriter, dataNode.DataType, dataNode.ClrTypeName, dataNode.ClrAssemblyName);
+        }
+
+        internal void WriteExtensionDataValue(XmlWriterDelegator xmlWriter, IDataNode dataNode)
+        {
+            IncrementItemCount(1);
+            if (dataNode == null)
+            {
+                WriteNull(xmlWriter);
+                return;
+            }
+
+            if (dataNode.PreservesReferences
+                && OnHandleReference(xmlWriter, (dataNode.Value == null ? dataNode : dataNode.Value), true /*canContainCyclicReference*/))
+                return;
+
+            Type dataType = dataNode.DataType;
+            if (dataType == Globals.TypeOfClassDataNode)
+                WriteExtensionClassData(xmlWriter, (ClassDataNode)dataNode);
+            else if (dataType == Globals.TypeOfCollectionDataNode)
+                WriteExtensionCollectionData(xmlWriter, (CollectionDataNode)dataNode);
+            else if (dataType == Globals.TypeOfXmlDataNode)
+                WriteExtensionXmlData(xmlWriter, (XmlDataNode)dataNode);
+            else if (dataType == Globals.TypeOfISerializableDataNode)
+                WriteExtensionISerializableData(xmlWriter, (ISerializableDataNode)dataNode);
+            else
+            {
+                WriteExtensionDataTypeInfo(xmlWriter, dataNode);
+
+                if (dataType == Globals.TypeOfObject)
+                {
+                    // NOTE: serialize value in DataNode<object> since it may contain non-primitive 
+                    // deserialized object (ex. empty class)
+                    object o = dataNode.Value;
+                    if (o != null)
+                        InternalSerialize(xmlWriter, o, false /*isDeclaredType*/, false /*writeXsiType*/, -1, o.GetType().TypeHandle);
+                }
+                else
+                    xmlWriter.WriteExtensionData(dataNode);
+            }
+            if (dataNode.PreservesReferences)
+                OnEndHandleReference(xmlWriter, (dataNode.Value == null ? dataNode : dataNode.Value), true  /*canContainCyclicReference*/);
+        }
+
+        internal bool TryWriteDeserializedExtensionData(XmlWriterDelegator xmlWriter, IDataNode dataNode)
+        {
+            object o = dataNode.Value;
+            if (o == null)
+                return false;
+
+            Type declaredType = (dataNode.DataContractName == null) ? o.GetType() : Globals.TypeOfObject;
+            InternalSerialize(xmlWriter, o, false /*isDeclaredType*/, false /*writeXsiType*/, -1, declaredType.TypeHandle);
+            return true;
+        }
+
+        private void WriteExtensionClassData(XmlWriterDelegator xmlWriter, ClassDataNode dataNode)
+        {
+            if (!TryWriteDeserializedExtensionData(xmlWriter, dataNode))
+            {
+                WriteExtensionDataTypeInfo(xmlWriter, dataNode);
+
+                IList<ExtensionDataMember> members = dataNode.Members;
+                if (members != null)
+                {
+                    for (int i = 0; i < members.Count; i++)
+                    {
+                        WriteExtensionDataMember(xmlWriter, members[i]);
+                    }
+                }
+            }
+        }
+
+        private void WriteExtensionCollectionData(XmlWriterDelegator xmlWriter, CollectionDataNode dataNode)
+        {
+            if (!TryWriteDeserializedExtensionData(xmlWriter, dataNode))
+            {
+                WriteExtensionDataTypeInfo(xmlWriter, dataNode);
+
+                WriteArraySize(xmlWriter, dataNode.Size);
+
+                IList<IDataNode> items = dataNode.Items;
+                if (items != null)
+                {
+                    for (int i = 0; i < items.Count; i++)
+                    {
+                        xmlWriter.WriteStartElement(dataNode.ItemName, dataNode.ItemNamespace);
+                        WriteExtensionDataValue(xmlWriter, items[i]);
+                        xmlWriter.WriteEndElement();
+                    }
+                }
+            }
+        }
+
+        private void WriteExtensionISerializableData(XmlWriterDelegator xmlWriter, ISerializableDataNode dataNode)
+        {
+            if (!TryWriteDeserializedExtensionData(xmlWriter, dataNode))
+            {
+                WriteExtensionDataTypeInfo(xmlWriter, dataNode);
+
+                if (dataNode.FactoryTypeName != null)
+                    xmlWriter.WriteAttributeQualifiedName(Globals.SerPrefix, DictionaryGlobals.ISerializableFactoryTypeLocalName, DictionaryGlobals.SerializationNamespace, dataNode.FactoryTypeName, dataNode.FactoryTypeNamespace);
+
+                IList<ISerializableDataMember> members = dataNode.Members;
+                if (members != null)
+                {
+                    for (int i = 0; i < members.Count; i++)
+                    {
+                        ISerializableDataMember member = members[i];
+                        xmlWriter.WriteStartElement(member.Name, string.Empty);
+                        WriteExtensionDataValue(xmlWriter, member.Value);
+                        xmlWriter.WriteEndElement();
+                    }
+                }
+            }
+        }
+
+        private void WriteExtensionXmlData(XmlWriterDelegator xmlWriter, XmlDataNode dataNode)
+        {
+            if (!TryWriteDeserializedExtensionData(xmlWriter, dataNode))
+            {
+                IList<XmlAttribute> xmlAttributes = dataNode.XmlAttributes;
+                if (xmlAttributes != null)
+                {
+                    foreach (XmlAttribute attribute in xmlAttributes)
+                        attribute.WriteTo(xmlWriter.Writer);
+                }
+                WriteExtensionDataTypeInfo(xmlWriter, dataNode);
+
+                IList<XmlNode> xmlChildNodes = dataNode.XmlChildNodes;
+                if (xmlChildNodes != null)
+                {
+                    foreach (XmlNode node in xmlChildNodes)
+                        node.WriteTo(xmlWriter.Writer);
+                }
+            }
+        }
     }
 }

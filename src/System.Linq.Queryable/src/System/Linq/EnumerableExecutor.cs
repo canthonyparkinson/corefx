@@ -7,7 +7,6 @@ using System.Linq.Expressions;
 
 namespace System.Linq
 {
-    // Must remain public for Silverlight
     public abstract class EnumerableExecutor
     {
         internal abstract object ExecuteBoxed();
@@ -15,25 +14,20 @@ namespace System.Linq
         internal static EnumerableExecutor Create(Expression expression)
         {
             Type execType = typeof(EnumerableExecutor<>).MakeGenericType(expression.Type);
-            return (EnumerableExecutor)Activator.CreateInstance(execType, new object[] { expression });
+            return (EnumerableExecutor)Activator.CreateInstance(execType, expression);
         }
     }
 
-    // Must remain public for Silverlight
     public class EnumerableExecutor<T> : EnumerableExecutor
     {
-        private Expression _expression;
+        private readonly Expression _expression;
 
-        // Must remain public for Silverlight
         public EnumerableExecutor(Expression expression)
         {
             _expression = expression;
         }
 
-        internal override object ExecuteBoxed()
-        {
-            return this.Execute();
-        }
+        internal override object ExecuteBoxed() => Execute();
 
         internal T Execute()
         {

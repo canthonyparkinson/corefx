@@ -44,7 +44,7 @@ namespace System.Threading.Tasks.Tests.ContinueWithAllAny
             _tcOption = parameters.ContinuationOptions;
 
 
-            // set up the TaskScheduler under which the contination will be scheduled
+            // set up the TaskScheduler under which the continuation will be scheduled
             _tm = TaskScheduler.Default;
 
             // create a new cancellation token for each test
@@ -119,7 +119,7 @@ namespace System.Threading.Tasks.Tests.ContinueWithAllAny
             // and map it to one of the things this is running.
             //
             // That is, given a task type, tm type, api, cancellation, etc. it should be 
-            // straightforward to figure out what variant of continuewhen is called.
+            // straightforward to figure out what variant of ContinueWhen is called.
             // 
             switch (_taskType)
             {
@@ -752,11 +752,11 @@ namespace System.Threading.Tasks.Tests.ContinueWithAllAny
     {
         Exceptional = -2,
         Cancelled = -1,
-        VeryLight = 1000,     // the number is the N input to the ZetaSequence workload
-        Light = 10000,
-        Medium = 1000000,
-        Heavy = 100000000,
-        VeryHeavy = 1000000000,
+        VeryLight = 100,     // the number is the N input to the ZetaSequence workload
+        Light = 200,
+        Medium = 400,
+        Heavy = 800,
+        VeryHeavy = 1600,
     }
 
     /// <summary>

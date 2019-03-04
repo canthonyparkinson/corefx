@@ -11,11 +11,11 @@
 
 using Microsoft.Win32;
 using System;
+using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
-using System.Globalization;
-using System.Diagnostics.Contracts;
-
+using System.ComponentModel;
 namespace System.Security.AccessControl
 {
     [Flags]
@@ -233,19 +233,19 @@ namespace System.Security.AccessControl
 
             error = Win32.ConvertSdToSddl(binaryForm, 1, flags, out resultSddl);
 
-            if (error == Interop.mincore.Errors.ERROR_INVALID_PARAMETER ||
-                error == Interop.mincore.Errors.ERROR_UNKNOWN_REVISION)
+            if (error == Interop.Errors.ERROR_INVALID_PARAMETER ||
+                error == Interop.Errors.ERROR_UNKNOWN_REVISION)
             {
                 //
                 // Indicates that the marshaling logic in GetBinaryForm is busted
                 //
 
-                Contract.Assert(false, "binaryForm produced invalid output");
+                Debug.Assert(false, "binaryForm produced invalid output");
                 throw new InvalidOperationException();
             }
-            else if (error != Interop.mincore.Errors.ERROR_SUCCESS)
+            else if (error != Interop.Errors.ERROR_SUCCESS)
             {
-                Contract.Assert(false, string.Format(CultureInfo.InvariantCulture, "Win32.ConvertSdToSddl returned {0}", error));
+                Debug.Assert(false, string.Format(CultureInfo.InvariantCulture, "Win32.ConvertSdToSddl returned {0}", error));
                 throw new InvalidOperationException();
             }
 
@@ -275,7 +275,6 @@ namespace System.Security.AccessControl
 nameof(binaryForm),
                     SR.ArgumentOutOfRange_ArrayTooSmall);
             }
-            Contract.EndContractBlock();
 
             //
             // the offset will grow as we go for each additional field (owner, group,
@@ -304,7 +303,7 @@ nameof(binaryForm),
 
             binaryForm[offset + 0] = Revision;
             binaryForm[offset + 1] = rmControl;
-            binaryForm[offset + 2] = (byte)((int)materializedControlFlags >> 0);
+            binaryForm[offset + 2] = unchecked((byte)((int)materializedControlFlags >> 0));
             binaryForm[offset + 3] = (byte)((int)materializedControlFlags >> 8);
 
             //
@@ -511,7 +510,6 @@ nameof(binaryForm),
                 throw new ArgumentOutOfRangeException(nameof(binaryForm),
                      SR.AccessControl_InvalidSecurityDescriptorRevision);
             }
-            Contract.EndContractBlock();
 
 
             ControlFlags flags;
@@ -631,7 +629,6 @@ nameof(binaryForm));
             {
                 throw new ArgumentNullException(nameof(sddlForm));
             }
-            Contract.EndContractBlock();
 
             int error;
             IntPtr byteArray = IntPtr.Zero;
@@ -640,7 +637,7 @@ nameof(binaryForm));
 
             try
             {
-                if (!Interop.mincore.ConvertStringSdToSd(
+                if (!Interop.Advapi32.ConvertStringSdToSd(
                         sddlForm,
                         GenericSecurityDescriptor.Revision,
                         out byteArray,
@@ -648,30 +645,29 @@ nameof(binaryForm));
                 {
                     error = Marshal.GetLastWin32Error();
 
-                    if (error == Interop.mincore.Errors.ERROR_INVALID_PARAMETER ||
-                        error == Interop.mincore.Errors.ERROR_INVALID_ACL ||
-                        error == Interop.mincore.Errors.ERROR_INVALID_SECURITY_DESCR ||
-                        error == Interop.mincore.Errors.ERROR_UNKNOWN_REVISION)
+                    if (error == Interop.Errors.ERROR_INVALID_PARAMETER ||
+                        error == Interop.Errors.ERROR_INVALID_ACL ||
+                        error == Interop.Errors.ERROR_INVALID_SECURITY_DESCR ||
+                        error == Interop.Errors.ERROR_UNKNOWN_REVISION)
                     {
                         throw new ArgumentException(
                              SR.ArgumentException_InvalidSDSddlForm,
 nameof(sddlForm));
                     }
-                    else if (error == Interop.mincore.Errors.ERROR_NOT_ENOUGH_MEMORY)
+                    else if (error == Interop.Errors.ERROR_NOT_ENOUGH_MEMORY)
                     {
                         throw new OutOfMemoryException();
                     }
-                    else if (error == Interop.mincore.Errors.ERROR_INVALID_SID)
+                    else if (error == Interop.Errors.ERROR_INVALID_SID)
                     {
                         throw new ArgumentException(
                              SR.AccessControl_InvalidSidInSDDLString,
 nameof(sddlForm));
                     }
-                    else if (error != Interop.mincore.Errors.ERROR_SUCCESS)
+                    else if (error != Interop.Errors.ERROR_SUCCESS)
                     {
-                        Contract.Assert(false, string.Format(CultureInfo.InvariantCulture, "Unexpected error out of Win32.ConvertStringSdToSd: {0}", error));
-                        // TODO : This should be a Win32Exception once that type is available
-                        throw new Exception();
+                        Debug.Assert(false, string.Format(CultureInfo.InvariantCulture, "Unexpected error out of Win32.ConvertStringSdToSd: {0}", error));
+                        throw new Win32Exception(error, SR.Format(SR.AccessControl_UnexpectedError, error));
                     }
                 }
 
@@ -690,7 +686,7 @@ nameof(sddlForm));
                 //
                 if (byteArray != IntPtr.Zero)
                 {
-                    Interop.mincore_obsolete.LocalFree(byteArray);
+                    Interop.Kernel32.LocalFree(byteArray);
                 }
             }
 
@@ -951,7 +947,6 @@ nameof(discretionaryAcl));
             {
                 throw new ArgumentNullException(nameof(rawSecurityDescriptor));
             }
-            Contract.EndContractBlock();
 
             CreateFromParts(
                 isContainer,
@@ -1212,7 +1207,6 @@ nameof(value));
             {
                 throw new ArgumentNullException(nameof(sid));
             }
-            Contract.EndContractBlock();
 
             if (DiscretionaryAcl != null)
             {
@@ -1226,7 +1220,6 @@ nameof(value));
             {
                 throw new ArgumentNullException(nameof(sid));
             }
-            Contract.EndContractBlock();
 
             if (SystemAcl != null)
             {

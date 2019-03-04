@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Microsoft.Win32.RegistryTests
 {
-    public class RegistryKey_CreateSubKey_str : RegistryTestsBase
+    public class RegistryKey_CreateSubKey_str : RegistryKeyCreateSubKeyTestsBase
     {
         [Fact]
         public void NegativeTests()
@@ -19,19 +19,7 @@ namespace Microsoft.Win32.RegistryTests
 
             // Should throw if key length above 255 characters
             const int maxValueNameLength = 255;
-            Assert.Throws<ArgumentException>(() => TestRegistryKey.CreateSubKey(new string('a', maxValueNameLength + 1)));
-
-            // Max number of parts to the registry key path is 509 (failing once it hits 510). 
-            // As TestRegistryKey is already a subkey, that gives us 507 remaining parts before an 
-            // exception is thrown.
-            const int maxNestedLevel = 507;
-            string exceedsNestedSubkeyName = string.Join(@"\", Enumerable.Repeat("a", maxNestedLevel));
-            using (RegistryKey k = TestRegistryKey.CreateSubKey(exceedsNestedSubkeyName))
-            {
-                // Verify TestRegistryKey is already nested, with 508 slashes meaning 509 parts
-                Assert.Equal(maxNestedLevel + 1, k.Name.Count(c => c == '\\')); 
-            }
-            Assert.Throws<IOException>(() => TestRegistryKey.CreateSubKey(exceedsNestedSubkeyName + @"\" + maxNestedLevel));
+            AssertExtensions.Throws<ArgumentException>("name", null, () => TestRegistryKey.CreateSubKey(new string('a', maxValueNameLength + 1)));
 
             // Should throw if RegistryKey is readonly
             const string name = "FooBar";
@@ -114,5 +102,15 @@ namespace Microsoft.Win32.RegistryTests
                 rk.CreateSubKey(subkeyName);
             }
         }
+
+        [Theory]
+        [MemberData(nameof(TestRegistrySubKeyNames))]
+        public void CreateSubKey_KeyExists_OpensKeyWithFixedUpName(string expected, string subKeyName) =>
+            Verify_CreateSubKey_KeyExists_OpensKeyWithFixedUpName(expected, () => TestRegistryKey.CreateSubKey(subKeyName));
+
+        [Theory]
+        [MemberData(nameof(TestRegistrySubKeyNames))]
+        public void CreateSubKey_KeyDoesNotExist_CreatesKeyWithFixedUpName(string expected, string subKeyName) =>
+            Verify_CreateSubKey_KeyDoesNotExist_CreatesKeyWithFixedUpName(expected, () => TestRegistryKey.CreateSubKey(subKeyName));
     }
 }

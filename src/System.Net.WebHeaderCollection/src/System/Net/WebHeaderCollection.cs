@@ -4,7 +4,10 @@
 
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
+using System.Globalization;
+using System.Runtime.Serialization;
 using System.Text;
 
 namespace System.Net
@@ -14,20 +17,29 @@ namespace System.Net
         Unknown,
         WebRequest,
         WebResponse,
+        HttpWebRequest,
+        HttpWebResponse,
+        HttpListenerRequest,
+        HttpListenerResponse,
+        FtpWebRequest,
+        FtpWebResponse,
+        FileWebRequest,
+        FileWebResponse,
     }
 
-    public sealed class WebHeaderCollection : IEnumerable
+    public class WebHeaderCollection : NameValueCollection, ISerializable
     {
         private const int ApproxAveHeaderLineSize = 30;
         private const int ApproxHighAvgNumHeaders = 16;
-
-        // Lazily initialized fields.
-        private List<string> _entriesList;
-        private Dictionary<string, string> _entriesDictionary;
-        private string[] _allKeys;
-
-        // This is the object that created the header collection.
         private WebHeaderCollectionType _type;
+        private NameValueCollection _innerCollection;
+
+        private static HeaderInfoTable _headerInfo;
+
+        protected WebHeaderCollection(SerializationInfo serializationInfo, StreamingContext streamingContext)
+        {
+            throw new PlatformNotSupportedException();
+        }
 
         private bool AllowHttpRequestHeader
         {
@@ -37,7 +49,31 @@ namespace System.Net
                 {
                     _type = WebHeaderCollectionType.WebRequest;
                 }
-                return _type == WebHeaderCollectionType.WebRequest;
+                return _type == WebHeaderCollectionType.WebRequest ||
+                      _type == WebHeaderCollectionType.HttpWebRequest ||
+                      _type == WebHeaderCollectionType.HttpListenerRequest;
+            }
+        }
+
+        private static HeaderInfoTable HeaderInfo
+        {
+            get
+            {
+                if (_headerInfo == null)
+                {
+                    _headerInfo = new HeaderInfoTable();
+                }
+                return _headerInfo;
+            }
+        }
+
+        private NameValueCollection InnerCollection
+        {
+            get
+            {
+                if (_innerCollection == null)
+                    _innerCollection = new NameValueCollection(ApproxHighAvgNumHeaders, CaseInsensitiveAscii.StaticInstance);
+                return _innerCollection;
             }
         }
 
@@ -49,7 +85,9 @@ namespace System.Net
                 {
                     _type = WebHeaderCollectionType.WebResponse;
                 }
-                return _type == WebHeaderCollectionType.WebResponse;
+                return _type == WebHeaderCollectionType.WebResponse ||
+                       _type == WebHeaderCollectionType.HttpWebResponse ||
+                       _type == WebHeaderCollectionType.HttpListenerResponse;
             }
         }
 
@@ -93,144 +131,313 @@ namespace System.Net
             }
         }
 
-        public string this[string name]
+        public override void Set(string name, string value)
         {
-            get
+            if (string.IsNullOrEmpty(name))
             {
-                string entry = null;
-                _entriesDictionary?.TryGetValue(name, out entry);
-                return entry;
+                throw new ArgumentNullException(nameof(name));
             }
-            set
+
+            name = HttpValidationHelpers.CheckBadHeaderNameChars(name);
+            ThrowOnRestrictedHeader(name);
+            value = HttpValidationHelpers.CheckBadHeaderValueChars(value);
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"calling InnerCollection.Set() key:[{name}], value:[{value}]");
+            if (_type == WebHeaderCollectionType.WebResponse)
             {
-                if (string.IsNullOrEmpty(name))
+                if (value != null && value.Length > ushort.MaxValue)
                 {
-                    throw new ArgumentNullException(nameof(name));
+                    throw new ArgumentOutOfRangeException(nameof(value), value, string.Format(CultureInfo.InvariantCulture,SR.net_headers_toolong, ushort.MaxValue));
                 }
+            }
+            InvalidateCachedArrays();
+            InnerCollection.Set(name, value);
+        }
 
-                name = CheckBadHeaderNameChars(name);
-                value = CheckBadHeaderValueChars(value);
+        public void Set(HttpRequestHeader header, string value)
+        {
+            if (!AllowHttpRequestHeader)
+            {
+                throw new InvalidOperationException(SR.net_headers_req);
+            }
+            this.Set(header.GetName(), value);
+        }
 
-                InvalidateCachedArray();
-                EnsureInitialized();
-
-                if (!_entriesDictionary.ContainsKey(name))
+        public void Set(HttpResponseHeader header, string value)
+        {
+            if (!AllowHttpResponseHeader)
+            {
+                throw new InvalidOperationException(SR.net_headers_rsp);
+            }
+            if (_type == WebHeaderCollectionType.WebResponse)
+            {
+                if (value != null && value.Length > ushort.MaxValue)
                 {
-                    Debug.Assert(_entriesList.FindIndex(s => StringComparer.OrdinalIgnoreCase.Equals(s, name)) == -1,
-                        $"'{name}' must not be in {nameof(_entriesList)}.");
-
-                    // Only add the name to the list if it isn't already in the dictionary.
-                    _entriesList.Add(name);
+                    throw new ArgumentOutOfRangeException(nameof(value), value, string.Format(CultureInfo.InvariantCulture, SR.net_headers_toolong, ushort.MaxValue));
                 }
+            }
+            this.Set(header.GetName(), value);
+        }
 
-                _entriesDictionary[name] = value;
+        public override void GetObjectData(SerializationInfo serializationInfo, StreamingContext streamingContext)
+        {
+            throw new PlatformNotSupportedException();
+        }
 
-                Debug.Assert(_entriesList.FindIndex(s => StringComparer.OrdinalIgnoreCase.Equals(s, name)) != -1,
-                    $"'{name}' must be in {nameof(_entriesList)}.");
+        void ISerializable.GetObjectData(SerializationInfo serializationInfo, StreamingContext streamingContext)
+        {
+            throw new PlatformNotSupportedException();
+        }
 
-                Debug.Assert(_entriesDictionary.Count == _entriesList.Count, "Counts must be equal.");
+        public void Remove(HttpRequestHeader header)
+        {
+            if (!AllowHttpRequestHeader)
+            {
+                throw new InvalidOperationException(SR.net_headers_req);
+            }
+            this.Remove(header.GetName());
+        }
+
+        public void Remove(HttpResponseHeader header)
+        {
+            if (!AllowHttpResponseHeader)
+            {
+                throw new InvalidOperationException(SR.net_headers_rsp);
+            }
+            this.Remove(header.GetName());
+        }
+
+        public override void OnDeserialization(object sender)
+        {
+            // Nop in desktop 
+        }
+             
+        public static bool IsRestricted(string headerName)
+        {
+            return IsRestricted(headerName, false);
+        }
+
+        public static bool IsRestricted(string headerName, bool response)
+        {
+            headerName =  HttpValidationHelpers.CheckBadHeaderNameChars(headerName);
+            return response ? HeaderInfo[headerName].IsResponseRestricted : HeaderInfo[headerName].IsRequestRestricted;
+        }
+
+        public override string[] GetValues(int index)
+        {
+            return InnerCollection.GetValues(index);
+        }
+
+        // GetValues
+        // Routine Description:
+        //     This method takes a header name and returns a string array representing
+        //     the individual values for that headers. For example, if the headers
+        //     contained the line Accept: text/plain, text/html then
+        //     GetValues("Accept") would return an array of two strings: "text/plain"
+        //     and "text/html".
+        // Arguments:
+        //     header      - Name of the header.
+        // Return Value:
+        //     string[] - array of parsed string objects
+        public override string[] GetValues(string header)
+        {
+            // First get the information about the header and the values for
+            // the header.
+            HeaderInfo info = HeaderInfo[header];
+            string[] values = InnerCollection.GetValues(header);
+            // If we have no information about the header or it doesn't allow
+            // multiple values, just return the values.
+            if (info == null || values == null || !info.AllowMultiValues)
+            {
+                return values;
+            }
+            // Here we have a multi value header. We need to go through
+            // each entry in the multi values array, and if an entry itself
+            // has multiple values we'll need to combine those in.
+            //
+            // We do some optimazation here, where we try not to copy the
+            // values unless there really is one that have multiple values.
+            string[] tempValues;
+            List<string> valueList = null;
+            for (int i = 0; i < values.Length; i++)
+            {
+                // Parse this value header.
+                tempValues = info.Parser(values[i]);
+                // If we don't have an array list yet, see if this
+                // value has multiple values.
+                if (valueList == null)
+                {
+                    // If it's not empty, replace valueList.
+                    // Because for invalid WebRequest headers, we will return empty
+                    // valueList instead of the default NameValueCollection.GetValues().
+                    if (tempValues != null)
+                    {
+                        // It does, so we need to create an array list that
+                        // represents the Values, then trim out this one and
+                        // the ones after it that haven't been parsed yet.
+                        valueList = new List<string>(values);
+                        valueList.RemoveRange(i, values.Length - i);
+                        valueList.AddRange(tempValues);
+                    }
+                }
+                else
+                {
+                    // We already have an List, so just add the values.
+                    valueList.AddRange(tempValues);
+                }
+            }
+            // See if we have an List. If we don't, just return the values.
+            // Otherwise convert the List to a string array and return that.
+            if (valueList != null)
+            {
+                return valueList.ToArray();
+            }
+            return values;
+        }
+
+        public override string GetKey(int index)
+        {
+            return InnerCollection.GetKey(index);
+        }
+
+        public override void Clear()
+        {
+            InvalidateCachedArrays();
+            if (_innerCollection != null)
+            {
+                _innerCollection.Clear();
             }
         }
 
-        private static readonly char[] s_httpTrimCharacters = new char[] { (char)0x09, (char)0xA, (char)0xB, (char)0xC, (char)0xD, (char)0x20 };
-
-        /// <summary>
-        /// Throws on invalid header value chars.
-        /// </summary>
-        private static string CheckBadHeaderValueChars(string value)
+        public override string Get(int index)
         {
-            if (string.IsNullOrEmpty(value))
+            if (_innerCollection == null)
             {
-                // empty value is OK.
-                return string.Empty;
+                return null;
             }
-
-            // Trim spaces from both ends.
-            value = value.Trim(s_httpTrimCharacters);
-
-            // First, check for correctly formed multi-line value.
-            // Second, check for absence of CTL characters.
-            int crlf = 0;
-            for (int i = 0; i < value.Length; ++i)
-            {
-                char c = (char)(0x000000ff & (uint)value[i]);
-                switch (crlf)
-                {
-                    case 0:
-                        if (c == '\r')
-                        {
-                            crlf = 1;
-                        }
-                        else if (c == '\n')
-                        {
-                            // Technically this is bad HTTP, but we want to be permissive in what we accept.
-                            // It is important to note that it would be a breaking change to reject this.
-                            crlf = 2;
-                        }
-                        else if (c == 127 || (c < ' ' && c != '\t'))
-                        {
-                            throw new ArgumentException(SR.Format(SR.net_WebHeaderInvalidControlChars, nameof(value)), nameof(value));
-                        }
-                        break;
-
-                    case 1:
-                        if (c == '\n')
-                        {
-                            crlf = 2;
-                            break;
-                        }
-                        throw new ArgumentException(SR.Format(SR.net_WebHeaderInvalidCRLFChars, nameof(value)), nameof(value));
-
-                    case 2:
-                        if (c == ' ' || c == '\t')
-                        {
-                            crlf = 0;
-                            break;
-                        }
-                        throw new ArgumentException(SR.Format(SR.net_WebHeaderInvalidCRLFChars, nameof(value)), nameof(value));
-                }
-            }
-
-            if (crlf != 0)
-            {
-                throw new ArgumentException(SR.Format(SR.net_WebHeaderInvalidCRLFChars, nameof(value)), nameof(value));
-            }
-
-            return value;
+            return _innerCollection.Get(index);
         }
 
-        /// <summary>
-        /// Throws on invalid header name chars.
-        /// </summary>
-        private static string CheckBadHeaderNameChars(string name)
+        public override string Get(string name)
         {
-            Debug.Assert(!string.IsNullOrEmpty(name));
-
-            // First, check for absence of separators and spaces.
-            if (HttpValidationHelpers.IsInvalidMethodOrHeaderString(name))
+            if (_innerCollection == null)
             {
-                throw new ArgumentException(SR.Format(SR.net_WebHeaderInvalidHeaderChars, nameof(name)), nameof(name));
+                return null;
             }
-
-            // Second, check for non CTL ASCII-7 characters (32-126).
-            if (ContainsNonAsciiChars(name))
-            {
-                throw new ArgumentException(SR.Format(SR.net_WebHeaderInvalidNonAsciiChars, nameof(name)), nameof(name));
-            }
-
-            return name;
+            return _innerCollection.Get(name);
         }
 
-        private static bool ContainsNonAsciiChars(string token)
+        public void Add(HttpRequestHeader header, string value)
         {
-            for (int i = 0; i < token.Length; ++i)
+            if (!AllowHttpRequestHeader)
             {
-                if ((token[i] < 0x20) || (token[i] > 0x7e))
+                throw new InvalidOperationException(SR.net_headers_req);
+            }
+            this.Add(header.GetName(), value);
+        }
+
+        public void Add(HttpResponseHeader header, string value)
+        {
+            if (!AllowHttpResponseHeader)
+            {
+                throw new InvalidOperationException(SR.net_headers_rsp);
+            }
+            if (_type == WebHeaderCollectionType.WebResponse)
+            {
+                if (value != null && value.Length > ushort.MaxValue)
                 {
-                    return true;
+                    throw new ArgumentOutOfRangeException(nameof(value), value, string.Format(CultureInfo.InvariantCulture, SR.net_headers_toolong, ushort.MaxValue));
                 }
             }
-            return false;
+            this.Add(header.GetName(), value);
+        }
+
+        public void Add(string header)
+        {
+            if (string.IsNullOrEmpty(header))
+            {
+                throw new ArgumentNullException(nameof(header));
+            }
+            int colpos = header.IndexOf(':');
+            // check for badly formed header passed in
+            if (colpos < 0)
+            {
+                throw new ArgumentException(SR.net_WebHeaderMissingColon, nameof(header));
+            }
+            string name = header.Substring(0, colpos);
+            string value = header.Substring(colpos + 1);
+            name = HttpValidationHelpers.CheckBadHeaderNameChars(name);
+            ThrowOnRestrictedHeader(name);
+            value = HttpValidationHelpers.CheckBadHeaderValueChars(value);
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Add({header}) calling InnerCollection.Add() key:[{name}], value:[{value}]");
+            if (_type == WebHeaderCollectionType.WebResponse)
+            {
+                if (value != null && value.Length > ushort.MaxValue)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value), value, string.Format(CultureInfo.InvariantCulture, SR.net_headers_toolong, ushort.MaxValue));
+                }
+            }
+            InvalidateCachedArrays();
+            InnerCollection.Add(name, value);
+        }
+
+        public override void Add(string name, string value)
+        {
+            if (name == null)
+            {
+                throw new ArgumentNullException(nameof(name));
+            }
+            if (name.Length == 0)
+            {
+                throw new ArgumentException(SR.Format(SR.net_emptyStringCall, nameof(name)), nameof(name));
+            }
+
+            name = HttpValidationHelpers.CheckBadHeaderNameChars(name);
+            ThrowOnRestrictedHeader(name);
+            value = HttpValidationHelpers.CheckBadHeaderValueChars(value);
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"calling InnerCollection.Add() key:[{name}], value:[{value}]");
+            if (_type == WebHeaderCollectionType.WebResponse)
+            {
+                if (value != null && value.Length > ushort.MaxValue)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value), value,string.Format(CultureInfo.InvariantCulture, SR.net_headers_toolong, ushort.MaxValue));
+                }
+            }
+            InvalidateCachedArrays();
+            InnerCollection.Add(name, value);
+        }
+
+        protected void AddWithoutValidate(string headerName, string headerValue)
+        {
+            headerName = HttpValidationHelpers.CheckBadHeaderNameChars(headerName);
+            headerValue = HttpValidationHelpers.CheckBadHeaderValueChars(headerValue);
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"calling InnerCollection.Add() key:[{headerName}], value:[{headerValue}]");
+            if (_type == WebHeaderCollectionType.WebResponse)
+            {
+                if (headerValue != null && headerValue.Length > ushort.MaxValue)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(headerValue), headerValue, string.Format(CultureInfo.InvariantCulture, SR.net_headers_toolong, ushort.MaxValue));
+                }
+            }
+            InvalidateCachedArrays();
+            InnerCollection.Add(headerName, headerValue);
+        }
+
+        internal void ThrowOnRestrictedHeader(string headerName)
+        {
+            if (_type == WebHeaderCollectionType.HttpWebRequest)
+            {
+                if (HeaderInfo[headerName].IsRequestRestricted)
+                {
+                    throw new ArgumentException(string.Format(SR.net_headerrestrict, headerName), nameof(headerName));
+                }
+            }
+            else if (_type == WebHeaderCollectionType.HttpListenerResponse)
+            {
+                if (HeaderInfo[headerName].IsResponseRestricted)
+                {
+                    throw new ArgumentException(string.Format(SR.net_headerrestrict, headerName), nameof(headerName));
+                }
+            }
         }
 
         // Remove -
@@ -246,36 +453,19 @@ namespace System.Net
         /// <devdoc>
         ///    <para>Removes the specified header.</para>
         /// </devdoc>
-        public void Remove(string name)
+        public override void Remove(string name)
         {
             if (string.IsNullOrEmpty(name))
             {
                 throw new ArgumentNullException(nameof(name));
             }
-
-            name = CheckBadHeaderNameChars(name);
-
-            if (IsInitialized)
+            ThrowOnRestrictedHeader(name);
+            name = HttpValidationHelpers.CheckBadHeaderNameChars(name);
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"calling InnerCollection.Remove() key:[{name}]");
+            if (_innerCollection != null)
             {
-                InvalidateCachedArray();
-
-                _entriesDictionary.Remove(name);
-
-                List<string> list = _entriesList;
-                StringComparer comparer = StringComparer.OrdinalIgnoreCase;
-                for (int i = list.Count - 1; i >= 0; i--)
-                {
-                    if (comparer.Equals(name, list[i]))
-                    {
-                        list.RemoveAt(i);
-                        break;
-                    }
-                }
-
-                Debug.Assert(_entriesList.FindIndex(s => StringComparer.OrdinalIgnoreCase.Equals(s, name)) == -1,
-                    $"'{name}' must not be in {nameof(_entriesList)}.");
-
-                Debug.Assert(_entriesDictionary.Count == _entriesList.Count, "Counts must be equal.");
+                InvalidateCachedArrays();
+                _innerCollection.Remove(name);
             }
         }
 
@@ -302,13 +492,11 @@ namespace System.Net
                 return "\r\n";
             }
 
-            Debug.Assert(IsInitialized);
-
             var sb = new StringBuilder(ApproxAveHeaderLineSize * Count);
 
-            foreach (string key in _entriesList)
+            foreach (string key in InnerCollection)
             {
-                string val = _entriesDictionary[key];
+                string val = InnerCollection.Get(key);
                 sb.Append(key)
                     .Append(": ")
                     .Append(val)
@@ -316,33 +504,47 @@ namespace System.Net
             }
 
             sb.Append("\r\n");
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"ToString: {sb}");
             return sb.ToString();
+        }
+
+        public byte[] ToByteArray()
+        {
+            string tempString = this.ToString();
+            return System.Text.Encoding.ASCII.GetBytes(tempString);
         }
 
         public WebHeaderCollection()
         {
         }
 
-        public int Count => _entriesList != null ? _entriesList.Count : 0;
-
-        public string[] AllKeys => _allKeys ?? (_allKeys = ToArray(_entriesList));
-
-        IEnumerator IEnumerable.GetEnumerator()
+        public override int Count
         {
-            EnsureInitialized();
-            return _entriesList.GetEnumerator();
+            get
+            {
+                return (_innerCollection == null ? 0 : _innerCollection.Count);
+            }
         }
 
-        private bool IsInitialized => _entriesList != null && _entriesDictionary != null;
-
-        private void EnsureInitialized()
+        public override KeysCollection Keys
         {
-            _entriesList = _entriesList ?? new List<string>(ApproxHighAvgNumHeaders);
-            _entriesDictionary = _entriesDictionary ?? new Dictionary<string, string>(ApproxHighAvgNumHeaders, StringComparer.OrdinalIgnoreCase);
+            get
+            {
+                return InnerCollection.Keys;
+            }
         }
 
-        private void InvalidateCachedArray() => _allKeys = null;
+        public override string[] AllKeys
+        {
+            get
+            {
+                return InnerCollection.AllKeys;
+            }
+        }
 
-        private static string[] ToArray(List<string> list) => list != null ? list.ToArray() : Array.Empty<string>();
+        public override IEnumerator GetEnumerator()
+        {
+            return InnerCollection.Keys.GetEnumerator();
+        }
     }
 }

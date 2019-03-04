@@ -41,7 +41,7 @@ namespace System.IO.Tests
             }
         }
 
-        [PlatformSpecific(PlatformID.AnyUnix)]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // Uses P/Invokes
         public async Task FifoReadWriteViaFileStream()
         {
             string fifoPath = GetTestFilePath();
@@ -90,13 +90,13 @@ namespace System.IO.Tests
             }
         }
 
-        [PlatformSpecific(PlatformID.Windows)] // Uses P/Invokes to create async pipe handle
+        [PlatformSpecific(TestPlatforms.Windows)] // Uses P/Invokes to create async pipe handle
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
         public async Task NamedPipeWriteViaAsyncFileStream(bool asyncWrites)
         {
-            string name = Guid.NewGuid().ToString("N");
+            string name = GetNamedPipeServerStreamName();
             using (var server = new NamedPipeServerStream(name, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
             {
                 Task serverTask = Task.Run(async () =>
@@ -124,13 +124,13 @@ namespace System.IO.Tests
             }
         }
 
-        [PlatformSpecific(PlatformID.Windows)] // Uses P/Invokes to create async pipe handle
+        [PlatformSpecific(TestPlatforms.Windows)] // Uses P/Invokes to create async pipe handle
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
         public async Task NamedPipeReadViaAsyncFileStream(bool asyncReads)
         {
-            string name = Guid.NewGuid().ToString("N");
+            string name = GetNamedPipeServerStreamName();
             using (var server = new NamedPipeServerStream(name, PipeDirection.Out, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
             {
                 Task serverTask = Task.Run(async () =>

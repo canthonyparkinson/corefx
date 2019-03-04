@@ -95,11 +95,23 @@ namespace System.Linq.Parallel.Tests
         [MemberData(nameof(OrderFailingOperators))]
         public static void First_AggregateException(Labeled<Operation> source, Labeled<Operation> operation)
         {
-            // Concat seems able to return the first element when the left query does not fail ("first" query).
-            // This test might be flaky in the case that it decides to run the right query too...
             if (operation.ToString().Contains("Concat-Left"))
             {
-                Assert.InRange(operation.Item(DefaultStart, DefaultSize, source.Item).First(), DefaultStart, DefaultStart + DefaultSize);
+                // The vast majority of the time, the operation returns a result instead of failing.
+                // Sufficient cores on a test machine may make the optimizer start enumerating the results.
+                int? result = null;
+                var exception = Record.Exception(() => { result = operation.Item(DefaultStart, DefaultSize, source.Item).First(); });
+                if (result.HasValue)
+                {
+                    Assert.Null(exception);
+                    Assert.InRange(result.Value, DefaultStart, DefaultStart + DefaultSize);
+                }
+                else
+                {
+                    Assert.NotNull(exception);
+                    var ae = Assert.IsType<AggregateException>(exception);
+                    Assert.All(ae.InnerExceptions, e => Assert.IsType<DeliberateTestException>(e));
+                }
             }
             else
             {
@@ -115,11 +127,23 @@ namespace System.Linq.Parallel.Tests
         [MemberData(nameof(OrderFailingOperators))]
         public static void FirstOrDefault_AggregateException(Labeled<Operation> source, Labeled<Operation> operation)
         {
-            // Concat seems able to return the first element when the left query does not fail ("first" query).
-            // This test might be flaky in the case that it decides to run the right query too...
             if (operation.ToString().Contains("Concat-Left"))
             {
-                Assert.InRange(operation.Item(DefaultStart, DefaultSize, source.Item).FirstOrDefault(), DefaultStart, DefaultStart + DefaultSize);
+                // The vast majority of the time, the operation returns a result instead of failing.
+                // Sufficient cores on a test machine may make the optimizer start enumerating the results.
+                int? result = null;
+                var exception = Record.Exception(() => { result = operation.Item(DefaultStart, DefaultSize, source.Item).FirstOrDefault(); });
+                if (result.HasValue)
+                {
+                    Assert.Null(exception);
+                    Assert.InRange(result.Value, DefaultStart, DefaultStart + DefaultSize);
+                }
+                else
+                {
+                    Assert.NotNull(exception);
+                    var ae = Assert.IsType<AggregateException>(exception);
+                    Assert.All(ae.InnerExceptions, e => Assert.IsType<DeliberateTestException>(e));
+                }
             }
             else
             {
@@ -232,11 +256,9 @@ namespace System.Linq.Parallel.Tests
         private static void ThrowsWrapped(Action query)
         {
             AggregateException outer = Assert.Throws<AggregateException>(query);
-            Assert.All(outer.InnerExceptions, inner =>
-            {
-                Assert.IsType<AggregateException>(inner);
-                Assert.All(((AggregateException)inner).InnerExceptions, e => Assert.IsType<DeliberateTestException>(e));
-            });
+            Exception inner = Assert.Single(outer.InnerExceptions);
+            AggregateException ae = Assert.IsType<AggregateException>(inner);
+            Assert.All(ae.InnerExceptions, e => Assert.IsType<DeliberateTestException>(e));
         }
 
         [Theory]

@@ -3,8 +3,8 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Diagnostics;
-using System.Diagnostics.Contracts;
 using System.Globalization;
+using System.IO;
 using System.Text;
 
 namespace System.Net.Http.Headers
@@ -40,7 +40,7 @@ namespace System.Net.Http.Headers
         {
             CheckCode(code);
             CheckAgent(agent);
-            HeaderUtilities.CheckValidQuotedString(text, "text");
+            HeaderUtilities.CheckValidQuotedString(text, nameof(text));
 
             _code = code;
             _agent = agent;
@@ -51,7 +51,7 @@ namespace System.Net.Http.Headers
         {
             CheckCode(code);
             CheckAgent(agent);
-            HeaderUtilities.CheckValidQuotedString(text, "text");
+            HeaderUtilities.CheckValidQuotedString(text, nameof(text));
 
             _code = code;
             _agent = agent;
@@ -65,7 +65,7 @@ namespace System.Net.Http.Headers
 
         private WarningHeaderValue(WarningHeaderValue source)
         {
-            Contract.Requires(source != null);
+            Debug.Assert(source != null);
 
             _code = source._code;
             _agent = source._agent;
@@ -75,7 +75,7 @@ namespace System.Net.Http.Headers
 
         public override string ToString()
         {
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = StringBuilderCache.Acquire();
 
             // Warning codes are always 3 digits according to RFC2616
             sb.Append(_code.ToString("000", NumberFormatInfo.InvariantInfo));
@@ -88,11 +88,11 @@ namespace System.Net.Http.Headers
             if (_date.HasValue)
             {
                 sb.Append(" \"");
-                sb.Append(HttpRuleParser.DateToString(_date.Value));
+                sb.Append(HttpDateParser.DateToString(_date.Value));
                 sb.Append('\"');
             }
 
-            return sb.ToString();
+            return StringBuilderCache.GetStringAndRelease(sb);
         }
 
         public override bool Equals(object obj)
@@ -158,7 +158,7 @@ namespace System.Net.Http.Headers
 
         internal static int GetWarningLength(string input, int startIndex, out object parsedValue)
         {
-            Contract.Requires(startIndex >= 0);
+            Debug.Assert(startIndex >= 0);
 
             parsedValue = null;
 
@@ -245,7 +245,7 @@ namespace System.Net.Http.Headers
                 return false;
             }
 
-            if (!HeaderUtilities.TryParseInt32(input.Substring(current, codeLength), out code))
+            if (!HeaderUtilities.TryParseInt32(input, current, codeLength, out code))
             {
                 Debug.Assert(false, "Unable to parse value even though it was parsed as <=3 digits string. Input: '" +
                     input + "', Current: " + current + ", CodeLength: " + codeLength);
@@ -301,7 +301,7 @@ namespace System.Net.Http.Headers
                 }
 
                 DateTimeOffset temp;
-                if (!HttpRuleParser.TryStringToDate(input.Substring(dateStartIndex, current - dateStartIndex), out temp))
+                if (!HttpDateParser.TryStringToDate(input.AsSpan(dateStartIndex, current - dateStartIndex), out temp))
                 {
                     return false;
                 }

@@ -24,21 +24,28 @@ namespace System.Collections.Tests
             return new Stack<string>();
         }
 
-        protected override bool Enumerator_Current_UndefinedOperation_Throws { get { return true; } }
+        protected override bool Enumerator_Current_UndefinedOperation_Throws => true;
+
+        protected override Type ICollection_NonGeneric_CopyTo_IndexLargerThanArrayCount_ThrowType => typeof(ArgumentOutOfRangeException);
 
         /// <summary>
         /// Returns a set of ModifyEnumerable delegates that modify the enumerable passed to them.
         /// </summary>
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations)
         {
-            get
+            if ((operations & ModifyOperation.Add) == ModifyOperation.Add)
             {
-                yield return (IEnumerable enumerable) => {
+                yield return (IEnumerable enumerable) =>
+                {
                     var casted = (Stack<string>)enumerable;
                     casted.Push(CreateT(2344));
                     return true;
                 };
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Remove) == ModifyOperation.Remove)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     var casted = (Stack<string>)enumerable;
                     if (casted.Count > 0)
                     {
@@ -47,7 +54,11 @@ namespace System.Collections.Tests
                     }
                     return false;
                 };
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Clear) == ModifyOperation.Clear)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     var casted = (Stack<string>)enumerable;
                     if (casted.Count > 0)
                     {

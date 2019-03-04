@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics.Contracts;
+using System.Diagnostics;
 
 namespace System.Net.Http.Headers
 {
@@ -43,7 +43,7 @@ namespace System.Net.Http.Headers
 
         private RangeConditionHeaderValue(RangeConditionHeaderValue source)
         {
-            Contract.Requires(source != null);
+            Debug.Assert(source != null);
 
             _entityTag = source._entityTag;
             _date = source._date;
@@ -57,7 +57,7 @@ namespace System.Net.Http.Headers
         {
             if (_entityTag == null)
             {
-                return HttpRuleParser.DateToString(_date.Value);
+                return HttpDateParser.DateToString(_date.Value);
             }
             return _entityTag.ToString();
         }
@@ -112,7 +112,7 @@ namespace System.Net.Http.Headers
 
         internal static int GetRangeConditionLength(string input, int startIndex, out object parsedValue)
         {
-            Contract.Requires(startIndex >= 0);
+            Debug.Assert(startIndex >= 0);
 
             parsedValue = null;
 
@@ -154,7 +154,7 @@ namespace System.Net.Http.Headers
             }
             else
             {
-                if (!HttpRuleParser.TryStringToDate(input.Substring(current), out date))
+                if (!HttpDateParser.TryStringToDate(input.AsSpan(current), out date))
                 {
                     return 0;
                 }

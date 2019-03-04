@@ -24,15 +24,15 @@
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 using System.Collections;
-#if CONCURRENT_COLLECTIONS
-using System.Collections.Concurrent;
-#else
+#if USE_INTERNAL_CONCURRENT_COLLECTIONS
 using System.Threading.Tasks.Dataflow.Internal.Collections;
+#else
+using System.Collections.Concurrent;
 #endif
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.Contracts;
 using System.Runtime.InteropServices;
+using Internal;
 
 namespace System.Threading.Tasks
 {
@@ -149,7 +149,7 @@ namespace System.Threading.Tasks
             Debug.Assert(INIT_SEGMENT_SIZE > 0, "Initial segment size must be > 0.");
             Debug.Assert((INIT_SEGMENT_SIZE & (INIT_SEGMENT_SIZE - 1)) == 0, "Initial segment size must be a power of 2");
             Debug.Assert(INIT_SEGMENT_SIZE <= MAX_SEGMENT_SIZE, "Initial segment size should be <= maximum.");
-            Debug.Assert(MAX_SEGMENT_SIZE < Int32.MaxValue / 2, "Max segment size * 2 must be < Int32.MaxValue, or else overflow could occur.");
+            Debug.Assert(MAX_SEGMENT_SIZE < int.MaxValue / 2, "Max segment size * 2 must be < Int32.MaxValue, or else overflow could occur.");
 
             // Initialize the queue
             _head = _tail = new Segment(INIT_SEGMENT_SIZE);
@@ -179,7 +179,7 @@ namespace System.Threading.Tasks
         /// <param name="segment">The segment in which to first attempt to store the item.</param>
         private void EnqueueSlow(T item, ref Segment segment)
         {
-            Contract.Requires(segment != null, "Expected a non-null segment.");
+            Debug.Assert(segment != null, "Expected a non-null segment.");
 
             if (segment._state._firstCopy != segment._state._first)
             {
@@ -235,8 +235,8 @@ namespace System.Threading.Tasks
         /// <returns>true if an item could be dequeued; otherwise, false.</returns>
         private bool TryDequeueSlow(ref Segment segment, ref T[] array, out T result)
         {
-            Contract.Requires(segment != null, "Expected a non-null segment.");
-            Contract.Requires(array != null, "Expected a non-null item array.");
+            Debug.Assert(segment != null, "Expected a non-null segment.");
+            Debug.Assert(array != null, "Expected a non-null item array.");
 
             if (segment._state._last != segment._state._lastCopy)
             {
@@ -293,8 +293,8 @@ namespace System.Threading.Tasks
         /// <returns>true if an item could be peeked; otherwise, false.</returns>
         private bool TryPeekSlow(ref Segment segment, ref T[] array, out T result)
         {
-            Contract.Requires(segment != null, "Expected a non-null segment.");
-            Contract.Requires(array != null, "Expected a non-null item array.");
+            Debug.Assert(segment != null, "Expected a non-null segment.");
+            Debug.Assert(array != null, "Expected a non-null item array.");
 
             if (segment._state._last != segment._state._lastCopy)
             {
@@ -359,8 +359,8 @@ namespace System.Threading.Tasks
         /// <returns>true if an item could be dequeued; otherwise, false.</returns>
         private bool TryDequeueIfSlow(Predicate<T> predicate, ref Segment segment, ref T[] array, out T result)
         {
-            Contract.Requires(segment != null, "Expected a non-null segment.");
-            Contract.Requires(array != null, "Expected a non-null item array.");
+            Debug.Assert(segment != null, "Expected a non-null segment.");
+            Debug.Assert(array != null, "Expected a non-null item array.");
 
             if (segment._state._last != segment._state._lastCopy)
             {
@@ -485,7 +485,7 @@ namespace System.Threading.Tasks
             /// <param name="size">The size to use for this segment.</param>
             internal Segment(int size)
             {
-                Contract.Requires((size & (size - 1)) == 0, "Size must be a power of 2");
+                Debug.Assert((size & (size - 1)) == 0, "Size must be a power of 2");
                 _array = new T[size];
             }
         }
@@ -524,7 +524,7 @@ namespace System.Threading.Tasks
             /// <param name="queue">The queue being debugged.</param>
             public SingleProducerSingleConsumerQueue_DebugView(SingleProducerSingleConsumerQueue<T> queue)
             {
-                Contract.Requires(queue != null, "Expected a non-null queue.");
+                Debug.Assert(queue != null, "Expected a non-null queue.");
                 _queue = queue;
             }
 
@@ -541,19 +541,5 @@ namespace System.Threading.Tasks
                 }
             }
         }
-    }
-
-
-    /// <summary>A placeholder class for common padding constants and eventually routines.</summary>
-    static class PaddingHelpers
-    {
-        /// <summary>A size greater than or equal to the size of the most common CPU cache lines.</summary>
-        internal const int CACHE_LINE_SIZE = 128;
-    }
-
-    /// <summary>Padding structure used to minimize false sharing in SingleProducerSingleConsumerQueue{T}.</summary>
-    [StructLayout(LayoutKind.Explicit, Size = PaddingHelpers.CACHE_LINE_SIZE - sizeof(Int32))] // Based on common case of 64-byte cache lines
-    struct PaddingFor32
-    {
     }
 }

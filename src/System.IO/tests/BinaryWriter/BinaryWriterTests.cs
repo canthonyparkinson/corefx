@@ -42,14 +42,14 @@ namespace System.IO.Tests
             // [] Can't construct a BinaryWriter on a readonly stream
             using (Stream memStream = new MemoryStream(new byte[10], false))
             {
-                Assert.Throws<ArgumentException>(() => new BinaryWriter(memStream));
+                AssertExtensions.Throws<ArgumentException>(null, () => new BinaryWriter(memStream));
             }
 
             // [] Can't construct a BinaryWriter with a closed stream
             {
                 Stream memStream = CreateStream();
                 memStream.Dispose();
-                Assert.Throws<ArgumentException>(() => new BinaryWriter(memStream));
+                AssertExtensions.Throws<ArgumentException>(null, () => new BinaryWriter(memStream));
             }
         }
 
@@ -98,7 +98,7 @@ namespace System.IO.Tests
             MemoryStream mstr = null;
             byte[] bArr = null;
             StringBuilder sb = new StringBuilder();
-            Int64 lReturn = 0;
+            long lReturn = 0;
 
             mstr = new MemoryStream();
             dw2 = new BinaryWriter(mstr);
@@ -197,7 +197,7 @@ namespace System.IO.Tests
             mstr = new MemoryStream();
             dw2 = new BinaryWriter(mstr);
             dw2.Write("0123456789".ToCharArray());
-            lReturn = dw2.Seek(4, SeekOrigin.End); //This wont throw any exception now.
+            lReturn = dw2.Seek(4, SeekOrigin.End); //This won't throw any exception now.
 
             Assert.Equal(14, mstr.Position);
 
@@ -209,7 +209,7 @@ namespace System.IO.Tests
             mstr = new MemoryStream();
             dw2 = new BinaryWriter(mstr);
             dw2.Write("0123456789".ToCharArray());
-            lReturn = dw2.Seek(11, SeekOrigin.Begin);  //This wont throw any exception now.
+            lReturn = dw2.Seek(11, SeekOrigin.Begin);  //This won't throw any exception now.
 
             Assert.Equal(11, mstr.Position);
 
@@ -261,7 +261,7 @@ namespace System.IO.Tests
             {
                 writer.Write("012345789".ToCharArray());
 
-                Assert.Throws<ArgumentException>(() => 
+                AssertExtensions.Throws<ArgumentException>(null, () =>
                 {
                     writer.Seek(3, ~SeekOrigin.Begin);
                 });
@@ -317,33 +317,79 @@ namespace System.IO.Tests
         }
 
         [Fact]
+        public void BinaryWriter_CloseTests()
+        {
+            // Closing multiple times should not throw an exception
+            using (Stream memStream = CreateStream())
+            using (BinaryWriter binaryWriter = new BinaryWriter(memStream))
+            {
+                binaryWriter.Close();
+                binaryWriter.Close();
+                binaryWriter.Close();
+            }
+        }
+
+        [Fact]
         public void BinaryWriter_DisposeTests_Negative()
         {
             using (Stream memStream = CreateStream())
             {
                 BinaryWriter binaryWriter = new BinaryWriter(memStream);
                 binaryWriter.Dispose();
-
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Seek(1, SeekOrigin.Begin));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(new byte[2], 0, 2));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(new char[2], 0, 2));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(true));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((byte)4));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(new byte[] { 1, 2 }));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write('a'));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(new char[] { 'a', 'b' }));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(5.3));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((short)3));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(33));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((Int64)42));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((sbyte)4));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write("Hello There"));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((float)4.3));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((UInt16)3));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((uint)4));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((ulong)5));
-                Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write("Bah"));
+                ValidateDisposedExceptions(binaryWriter);
             }
+        }
+
+        [Fact]
+        public void BinaryWriter_CloseTests_Negative()
+        {
+            using (Stream memStream = CreateStream())
+            {
+                BinaryWriter binaryWriter = new BinaryWriter(memStream);
+                binaryWriter.Close();
+                ValidateDisposedExceptions(binaryWriter);
+            }
+        }
+
+        private void ValidateDisposedExceptions(BinaryWriter binaryWriter)
+        {
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Seek(1, SeekOrigin.Begin));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(new byte[2], 0, 2));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(new char[2], 0, 2));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(true));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((byte)4));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(new byte[] { 1, 2 }));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write('a'));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(new char[] { 'a', 'b' }));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(5.3));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((short)3));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write(33));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((long)42));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((sbyte)4));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write("Hello There"));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((float)4.3));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((ushort)3));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((uint)4));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write((ulong)5));
+            Assert.Throws<ObjectDisposedException>(() => binaryWriter.Write("Bah"));
+        }
+
+        private class BinaryWriterOutStream : BinaryWriter
+        {
+            public BinaryWriterOutStream(Stream output)
+                : base(output)
+            {
+            }
+
+            public Stream GetOutStream => OutStream;
+        }
+
+        [Fact]
+        public void BinaryWriter_OutStream()
+        {
+            var stream = new MemoryStream();
+            var bw = new BinaryWriterOutStream(stream);
+            Assert.Same(stream, bw.GetOutStream);
         }
     }
 }

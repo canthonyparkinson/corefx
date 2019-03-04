@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using Xunit;
 
 namespace System.Linq.Tests
@@ -60,8 +59,8 @@ namespace System.Linq.Tests
         {
             IQueryable<int> source = null;
             
-            Assert.Throws<ArgumentNullException>("source", () => source.DefaultIfEmpty());
-            Assert.Throws<ArgumentNullException>("source", () => source.DefaultIfEmpty(42));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => source.DefaultIfEmpty());
+            AssertExtensions.Throws<ArgumentNullException>("source", () => source.DefaultIfEmpty(42));
         }
 
         [Fact]

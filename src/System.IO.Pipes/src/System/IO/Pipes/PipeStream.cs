@@ -5,8 +5,6 @@
 using Microsoft.Win32.SafeHandles;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Diagnostics.Contracts;
-using System.Runtime.InteropServices;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,6 +20,7 @@ namespace System.IO.Pipes
         private bool _canRead;
         private bool _canWrite;
         private bool _isAsync;
+        private bool _isCurrentUserOnly;
         private bool _isMessageComplete;
         private bool _isFromExistingHandle;
         private bool _isHandleExposed;
@@ -95,8 +94,7 @@ namespace System.IO.Pipes
         // Once a PipeStream has a handle ready, it should call this method to set up the PipeStream.  If
         // the pipe is in a connected state already, it should also set the IsConnected (protected) property.
         // This method may also be called to uninitialize a handle, setting it to null.
-        [SecuritySafeCritical]
-        internal void InitializeHandle(SafePipeHandle handle, bool isExposed, bool isAsync)
+        protected void InitializeHandle(SafePipeHandle handle, bool isExposed, bool isAsync)
         {
             if (isAsync && handle != null)
             {
@@ -111,8 +109,7 @@ namespace System.IO.Pipes
             _isFromExistingHandle = isExposed;
         }
 
-        [SecurityCritical]
-        public override int Read([In, Out] byte[] buffer, int offset, int count)
+        public override int Read(byte[] buffer, int offset, int count)
         {
             if (_isAsync)
             {
@@ -126,10 +123,25 @@ namespace System.IO.Pipes
             }
             CheckReadOperations();
 
-            return ReadCore(buffer, offset, count);
+            return ReadCore(new Span<byte>(buffer, offset, count));
         }
 
-        [SecuritySafeCritical]
+        public override int Read(Span<byte> buffer)
+        {
+            if (_isAsync)
+            {
+                return base.Read(buffer);
+            }
+
+            if (!CanRead)
+            {
+                throw Error.GetReadNotSupported();
+            }
+            CheckReadOperations();
+
+            return ReadCore(buffer);
+        }
+
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             CheckReadWriteArgs(buffer, offset, count);
@@ -156,10 +168,53 @@ namespace System.IO.Pipes
                 return s_zeroTask;
             }
 
-            return ReadAsyncCore(buffer, offset, count, cancellationToken);
+            return ReadAsyncCore(new Memory<byte>(buffer, offset, count), cancellationToken);
         }
 
-        [SecurityCritical]
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (!_isAsync)
+            {
+                return base.ReadAsync(buffer, cancellationToken);
+            }
+
+            if (!CanRead)
+            {
+                throw Error.GetReadNotSupported();
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return new ValueTask<int>(Task.FromCanceled<int>(cancellationToken));
+            }
+
+            CheckReadOperations();
+
+            if (buffer.Length == 0)
+            {
+                UpdateMessageCompletion(false);
+                return new ValueTask<int>(0);
+            }
+
+            return new ValueTask<int>(ReadAsyncCore(buffer, cancellationToken));
+        }
+
+        public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            if (_isAsync)
+                return TaskToApm.Begin(ReadAsync(buffer, offset, count, CancellationToken.None), callback, state);
+            else
+                return base.BeginRead(buffer, offset, count, callback, state);
+        }
+
+        public override int EndRead(IAsyncResult asyncResult)
+        {
+            if (_isAsync)
+                return TaskToApm.End<int>(asyncResult);
+            else
+                return base.EndRead(asyncResult);
+        }
+
         public override void Write(byte[] buffer, int offset, int count)
         {
             if (_isAsync)
@@ -175,10 +230,26 @@ namespace System.IO.Pipes
             }
             CheckWriteOperations();
 
-            WriteCore(buffer, offset, count);
+            WriteCore(new ReadOnlySpan<byte>(buffer, offset, count));
         }
 
-        [SecuritySafeCritical]
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            if (_isAsync)
+            {
+                base.Write(buffer);
+                return;
+            }
+
+            if (!CanWrite)
+            {
+                throw Error.GetWriteNotSupported();
+            }
+            CheckWriteOperations();
+
+            WriteCore(buffer);
+        }
+
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             CheckReadWriteArgs(buffer, offset, count);
@@ -204,7 +275,50 @@ namespace System.IO.Pipes
                 return Task.CompletedTask;
             }
 
-            return WriteAsyncCore(buffer, offset, count, cancellationToken);
+            return WriteAsyncCore(new ReadOnlyMemory<byte>(buffer, offset, count), cancellationToken);
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (!_isAsync)
+            {
+                return base.WriteAsync(buffer, cancellationToken);
+            }
+
+            if (!CanWrite)
+            {
+                throw Error.GetWriteNotSupported();
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return new ValueTask(Task.FromCanceled<int>(cancellationToken));
+            }
+
+            CheckWriteOperations();
+
+            if (buffer.Length == 0)
+            {
+                return default;
+            }
+
+            return new ValueTask(WriteAsyncCore(buffer, cancellationToken));
+        }
+
+        public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            if (_isAsync)
+                return TaskToApm.Begin(WriteAsync(buffer, offset, count, CancellationToken.None), callback, state);
+            else
+                return base.BeginWrite(buffer, offset, count, callback, state);
+        }
+
+        public override void EndWrite(IAsyncResult asyncResult)
+        {
+            if (_isAsync)
+                TaskToApm.End(asyncResult);
+            else
+                base.EndWrite(asyncResult);
         }
 
         private void CheckReadWriteArgs(byte[] buffer, int offset, int count)
@@ -220,46 +334,27 @@ namespace System.IO.Pipes
         }
 
         [Conditional("DEBUG")]
-        private static void DebugAssertReadWriteArgs(byte[] buffer, int offset, int count, SafePipeHandle handle)
+        private static void DebugAssertHandleValid(SafePipeHandle handle)
         {
-            Debug.Assert(buffer != null, "buffer is null");
-            Debug.Assert(offset >= 0, "offset is negative");
-            Debug.Assert(count >= 0, "count is negative");
-            Debug.Assert(offset <= buffer.Length - count, "offset + count is too big");
             Debug.Assert(handle != null, "handle is null");
             Debug.Assert(!handle.IsClosed, "handle is closed");
         }
 
-        [ThreadStatic]
-        private static byte[] t_singleByteArray;
-
-        private static byte[] SingleByteArray
-        {
-            get { return t_singleByteArray ?? (t_singleByteArray = new byte[1]); }
-        }
-
         // Reads a byte from the pipe stream.  Returns the byte cast to an int
         // or -1 if the connection has been broken.
-        [SecurityCritical]
-        public override int ReadByte()
+        public override unsafe int ReadByte()
         {
-            byte[] buffer = SingleByteArray;
-            return Read(buffer, 0, 1) > 0 ?
-                buffer[0] :
-                -1;
+            byte b;
+            return Read(new Span<byte>(&b, 1)) > 0 ? b : -1;
         }
 
-        [SecurityCritical]
-        public override void WriteByte(byte value)
+        public override unsafe void WriteByte(byte value)
         {
-            byte[] buffer = SingleByteArray;
-            buffer[0] = value;
-            Write(buffer, 0, 1);
+            Write(new ReadOnlySpan<byte>(&value, 1));
         }
 
         // Does nothing on PipeStreams.  We cannot call Interop.FlushFileBuffers here because we can deadlock
         // if the other end of the pipe is no longer interested in reading from the pipe. 
-        [SecurityCritical]
         public override void Flush()
         {
             CheckWriteOperations();
@@ -269,7 +364,19 @@ namespace System.IO.Pipes
             }
         }
 
-        [SecurityCritical]
+        public override Task FlushAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                Flush();
+                return Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException(ex);
+            }
+        }
+
         protected override void Dispose(bool disposing)
         {
             try
@@ -281,7 +388,7 @@ namespace System.IO.Pipes
                     _handle.Dispose();
                 }
 
-                UninitializeAsyncHandle();
+                DisposeCore(disposing);
             }
             finally
             {
@@ -317,7 +424,6 @@ namespace System.IO.Pipes
         // message, otherwise it is set to true. 
         public bool IsMessageComplete
         {
-            [SecurityCritical]
             [SuppressMessage("Microsoft.Security", "CA2122:DoNotIndirectlyExposeMethodsWithLinkDemands", Justification = "Security model of pipes: demand at creation but no subsequent demands")]
             get
             {
@@ -359,7 +465,6 @@ namespace System.IO.Pipes
 
         public SafePipeHandle SafePipeHandle
         {
-            [SecurityCritical]
             [SuppressMessage("Microsoft.Security", "CA2122:DoNotIndirectlyExposeMethodsWithLinkDemands", Justification = "Security model of pipes: demand at creation but no subsequent demands")]
             get
             {
@@ -379,14 +484,13 @@ namespace System.IO.Pipes
 
         internal SafePipeHandle InternalHandle
         {
-            [SecurityCritical]
             get
             {
                 return _handle;
             }
         }
 
-        internal bool IsHandleExposed
+        protected bool IsHandleExposed
         {
             get
             {
@@ -396,7 +500,6 @@ namespace System.IO.Pipes
 
         public override bool CanRead
         {
-            [Pure]
             get
             {
                 return _canRead;
@@ -405,7 +508,6 @@ namespace System.IO.Pipes
 
         public override bool CanWrite
         {
-            [Pure]
             get
             {
                 return _canWrite;
@@ -414,7 +516,6 @@ namespace System.IO.Pipes
 
         public override bool CanSeek
         {
-            [Pure]
             get
             {
                 return false;
@@ -453,8 +554,7 @@ namespace System.IO.Pipes
 
         // anonymous pipe ends and named pipe server can get/set properties when broken 
         // or connected. Named client overrides
-        [SecurityCritical]
-        internal virtual void CheckPipePropertyOperations()
+        protected internal virtual void CheckPipePropertyOperations()
         {
             if (CheckOperationsRequiresSetHandle && _handle == null)
             {
@@ -470,9 +570,7 @@ namespace System.IO.Pipes
 
         // Reads can be done in Connected and Broken. In the latter,
         // read returns 0 bytes
-        [SecurityCritical]
-        [SuppressMessage("Microsoft.Security", "CA2122:DoNotIndirectlyExposeMethodsWithLinkDemands", Justification = "Consistent with security model")]
-        internal void CheckReadOperations()
+        protected internal void CheckReadOperations()
         {
             // Invalid operation
             if (_state == PipeState.WaitingToConnect)
@@ -496,9 +594,7 @@ namespace System.IO.Pipes
         }
 
         // Writes can only be done in connected state
-        [SecurityCritical]
-        [SuppressMessage("Microsoft.Security", "CA2122:DoNotIndirectlyExposeMethodsWithLinkDemands", Justification = "Consistent with security model")]
-        internal void CheckWriteOperations()
+        protected internal void CheckWriteOperations()
         {
             // Invalid operation
             if (_state == PipeState.WaitingToConnect)
@@ -536,6 +632,18 @@ namespace System.IO.Pipes
             set
             {
                 _state = value;
+            }
+        }
+
+        internal bool IsCurrentUserOnly
+        {
+            get
+            {
+                return _isCurrentUserOnly;
+            }
+            set
+            {
+                _isCurrentUserOnly = value;
             }
         }
     }

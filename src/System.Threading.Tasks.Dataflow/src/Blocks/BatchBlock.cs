@@ -36,7 +36,7 @@ namespace System.Threading.Tasks.Dataflow
         /// <summary>Initializes this <see cref="BatchBlock{T}"/> with the specified batch size.</summary>
         /// <param name="batchSize">The number of items to group into a batch.</param>
         /// <exception cref="System.ArgumentOutOfRangeException">The <paramref name="batchSize"/> must be positive.</exception>
-        public BatchBlock(Int32 batchSize) :
+        public BatchBlock(int batchSize) :
             this(batchSize, GroupingDataflowBlockOptions.Default)
         { }
 
@@ -46,7 +46,7 @@ namespace System.Threading.Tasks.Dataflow
         /// <exception cref="System.ArgumentOutOfRangeException">The <paramref name="batchSize"/> must be positive.</exception>
         /// <exception cref="System.ArgumentOutOfRangeException">The <paramref name="batchSize"/> must be no greater than the value of the BoundedCapacity option if a non-default value has been set.</exception>
         /// <exception cref="System.ArgumentNullException">The <paramref name="dataflowBlockOptions"/> is null (Nothing in Visual Basic).</exception>
-        public BatchBlock(Int32 batchSize, GroupingDataflowBlockOptions dataflowBlockOptions)
+        public BatchBlock(int batchSize, GroupingDataflowBlockOptions dataflowBlockOptions)
         {
             // Validate arguments
             if (batchSize < 1) throw new ArgumentOutOfRangeException(nameof(batchSize), SR.ArgumentOutOfRange_GenericPositive);
@@ -131,7 +131,7 @@ namespace System.Threading.Tasks.Dataflow
         }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="TryReceive"]/*' />
-        public Boolean TryReceive(Predicate<T[]> filter, out T[] item)
+        public bool TryReceive(Predicate<T[]> filter, out T[] item)
         {
             return _source.TryReceive(filter, out item);
         }
@@ -150,16 +150,16 @@ namespace System.Threading.Tasks.Dataflow
         /// If the number of items provided to the block is not evenly divisible by the batch size provided
         /// to the block's constructor, the block's final batch may contain fewer than the requested number of items.
         /// </remarks>
-        public Int32 BatchSize { get { return _target.BatchSize; } }
+        public int BatchSize { get { return _target.BatchSize; } }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Targets/Member[@name="OfferMessage"]/*' />
-        DataflowMessageStatus ITargetBlock<T>.OfferMessage(DataflowMessageHeader messageHeader, T messageValue, ISourceBlock<T> source, Boolean consumeToAccept)
+        DataflowMessageStatus ITargetBlock<T>.OfferMessage(DataflowMessageHeader messageHeader, T messageValue, ISourceBlock<T> source, bool consumeToAccept)
         {
             return _target.OfferMessage(messageHeader, messageValue, source, consumeToAccept);
         }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="ConsumeMessage"]/*' />
-        T[] ISourceBlock<T[]>.ConsumeMessage(DataflowMessageHeader messageHeader, ITargetBlock<T[]> target, out Boolean messageConsumed)
+        T[] ISourceBlock<T[]>.ConsumeMessage(DataflowMessageHeader messageHeader, ITargetBlock<T[]> target, out bool messageConsumed)
         {
             return _source.ConsumeMessage(messageHeader, target, out messageConsumed);
         }
@@ -211,7 +211,7 @@ namespace System.Threading.Tasks.Dataflow
             /// <param name="batchBlock">The batch being viewed.</param>
             public DebugView(BatchBlock<T> batchBlock)
             {
-                Contract.Requires(batchBlock != null, "Need a block with which to construct the debug view");
+                Debug.Assert(batchBlock != null, "Need a block with which to construct the debug view");
                 _batchBlock = batchBlock;
                 _targetDebuggingInformation = batchBlock._target.GetDebuggingInformation();
                 _sourceDebuggingInformation = batchBlock._source.GetDebuggingInformation();
@@ -303,7 +303,7 @@ namespace System.Threading.Tasks.Dataflow
                     // A non-greedy batch requires at least batchSize sources to be successful.
                     // Thus, we initialize our collections to be able to store at least that many elements
                     // in order to avoid unnecessary allocations below that point.
-                    Contract.Requires(batchSize > 0, "A positive batch size is required");
+                    Debug.Assert(batchSize > 0, "A positive batch size is required");
                     PostponedMessages = new QueuedMap<ISourceBlock<T>, DataflowMessageHeader>(batchSize);
                     PostponedMessagesTemp = new KeyValuePair<ISourceBlock<T>, DataflowMessageHeader>[batchSize];
                     ReservedSourcesTemp = new List<KeyValuePair<ISourceBlock<T>, KeyValuePair<DataflowMessageHeader, T>>>(batchSize);
@@ -317,12 +317,12 @@ namespace System.Threading.Tasks.Dataflow
             /// <param name="dataflowBlockOptions">The options with which to configure this <see cref="BatchBlock{T}"/>.  Assumed to be immutable.</param>
             /// <exception cref="System.ArgumentOutOfRangeException">The <paramref name="batchSize"/> must be positive.</exception>
             /// <exception cref="System.ArgumentNullException">The <paramref name="dataflowBlockOptions"/> is null (Nothing in Visual Basic).</exception>
-            internal BatchBlockTargetCore(BatchBlock<T> owningBatch, Int32 batchSize, Action<T[]> batchCompletedAction, GroupingDataflowBlockOptions dataflowBlockOptions)
+            internal BatchBlockTargetCore(BatchBlock<T> owningBatch, int batchSize, Action<T[]> batchCompletedAction, GroupingDataflowBlockOptions dataflowBlockOptions)
             {
-                Contract.Requires(owningBatch != null, "This batch target core must be associated with a batch block.");
-                Contract.Requires(batchSize >= 1, "Batch sizes must be positive.");
-                Contract.Requires(batchCompletedAction != null, "Completion action must be specified.");
-                Contract.Requires(dataflowBlockOptions != null, "Options required to configure the block.");
+                Debug.Assert(owningBatch != null, "This batch target core must be associated with a batch block.");
+                Debug.Assert(batchSize >= 1, "Batch sizes must be positive.");
+                Debug.Assert(batchCompletedAction != null, "Completion action must be specified.");
+                Debug.Assert(dataflowBlockOptions != null, "Options required to configure the block.");
 
                 // Store arguments
                 _owningBatch = owningBatch;
@@ -362,7 +362,7 @@ namespace System.Threading.Tasks.Dataflow
             }
 
             /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Targets/Member[@name="OfferMessage"]/*' />
-            internal DataflowMessageStatus OfferMessage(DataflowMessageHeader messageHeader, T messageValue, ISourceBlock<T> source, Boolean consumeToAccept)
+            internal DataflowMessageStatus OfferMessage(DataflowMessageHeader messageHeader, T messageValue, ISourceBlock<T> source, bool consumeToAccept)
             {
                 // Validate arguments
                 if (!messageHeader.IsValid) throw new ArgumentException(SR.Argument_InvalidMessageHeader, nameof(messageHeader));
@@ -488,7 +488,7 @@ namespace System.Threading.Tasks.Dataflow
             internal Task Completion { get { return _completionTask.Task; } }
 
             /// <summary>Gets the size of the batches generated by this <see cref="BatchBlock{T}"/>.</summary>
-            internal Int32 BatchSize { get { return _batchSize; } }
+            internal int BatchSize { get { return _batchSize; } }
 
             /// <summary>Gets whether the target has had cancellation requested or an exception has occurred.</summary>
             private bool CanceledOrFaulted
@@ -554,7 +554,7 @@ namespace System.Threading.Tasks.Dataflow
                             if (exceptions != null)
                             {
                                 // It is important to migrate these exceptions to the source part of the owning batch,
-                                // because that is the completion task that is publically exposed.
+                                // because that is the completion task that is publicly exposed.
                                 targetCore._owningBatch._source.AddExceptions(exceptions);
                             }
 
@@ -626,7 +626,7 @@ namespace System.Threading.Tasks.Dataflow
             /// <param name="isReplacementReplica">Whether this call is the continuation of a previous message loop.</param>
             private void ProcessAsyncIfNecessary(bool isReplacementReplica = false)
             {
-                Contract.Requires(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
+                Debug.Assert(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
                 Common.ContractAssertMonitorStatus(IncomingLock, held: true);
 
                 if (BatchesNeedProcessing)
@@ -641,7 +641,7 @@ namespace System.Threading.Tasks.Dataflow
             /// </summary>
             private void ProcessAsyncIfNecessary_Slow(bool isReplacementReplica)
             {
-                Contract.Requires(BatchesNeedProcessing, "There must be a batch that needs processing.");
+                Debug.Assert(BatchesNeedProcessing, "There must be a batch that needs processing.");
 
                 // Create task and store into _taskForInputProcessing prior to scheduling the task
                 // so that _taskForInputProcessing will be visibly set in the task loop.
@@ -654,7 +654,7 @@ namespace System.Threading.Tasks.Dataflow
                 {
                     etwLog.TaskLaunchedForMessageHandling(
                         _owningBatch, _nonGreedyState.TaskForInputProcessing, DataflowEtwProvider.TaskLaunchedReason.ProcessingInputMessages,
-                        _messages.Count + (_nonGreedyState != null ? _nonGreedyState.PostponedMessages.Count : 0));
+                        _messages.Count + _nonGreedyState.PostponedMessages.Count);
                 }
 #endif
 
@@ -673,7 +673,7 @@ namespace System.Threading.Tasks.Dataflow
             [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
             private void ProcessMessagesLoopCore()
             {
-                Contract.Requires(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
+                Debug.Assert(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
                 Common.ContractAssertMonitorStatus(IncomingLock, held: false);
                 try
                 {
@@ -762,8 +762,8 @@ namespace System.Threading.Tasks.Dataflow
             /// <remarks>Whether we'll accept consuming fewer elements than the defined batch size.</remarks>
             private void RetrievePostponedItemsNonGreedy(bool allowFewerThanBatchSize)
             {
-                Contract.Requires(!_dataflowBlockOptions.Greedy, "This method may only be used in non-greedy mode.");
-                Contract.Requires(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
+                Debug.Assert(!_dataflowBlockOptions.Greedy, "This method may only be used in non-greedy mode.");
+                Debug.Assert(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
                 Common.ContractAssertMonitorStatus(IncomingLock, held: false);
 
                 // Shortcuts just to keep the code cleaner
@@ -879,9 +879,9 @@ namespace System.Threading.Tasks.Dataflow
             /// <remarks>Whether we'll accept consuming fewer elements than the defined batch size.</remarks>
             private void RetrievePostponedItemsGreedyBounded(bool allowFewerThanBatchSize)
             {
-                Contract.Requires(_dataflowBlockOptions.Greedy, "This method may only be used in greedy mode.");
-                Contract.Requires(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
-                Contract.Requires(_boundingState != null, "Bounding state is required when in bounded mode.");
+                Debug.Assert(_dataflowBlockOptions.Greedy, "This method may only be used in greedy mode.");
+                Debug.Assert(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
+                Debug.Assert(_boundingState != null, "Bounding state is required when in bounded mode.");
                 Common.ContractAssertMonitorStatus(IncomingLock, held: false);
 
                 // Shortcuts just to keep the code cleaner
@@ -988,9 +988,9 @@ namespace System.Threading.Tasks.Dataflow
             /// </summary>
             private void ConsumeReservedMessagesNonGreedy()
             {
-                Contract.Requires(!_dataflowBlockOptions.Greedy, "This method may only be used in non-greedy mode.");
-                Contract.Requires(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
-                Contract.Requires(_nonGreedyState.ReservedSourcesTemp != null, "ReservedSourcesTemp should have been initialized.");
+                Debug.Assert(!_dataflowBlockOptions.Greedy, "This method may only be used in non-greedy mode.");
+                Debug.Assert(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
+                Debug.Assert(_nonGreedyState.ReservedSourcesTemp != null, "ReservedSourcesTemp should have been initialized.");
                 Common.ContractAssertMonitorStatus(IncomingLock, held: false);
 
                 // Consume the reserved items and store the data.
@@ -1025,7 +1025,7 @@ namespace System.Threading.Tasks.Dataflow
                     // Increment the bounding count with the number of consumed messages 
                     if (_boundingState != null) _boundingState.CurrentCount += reserved.Count;
 
-                    // Enqueue the consumed mesasages
+                    // Enqueue the consumed messages
                     foreach (KeyValuePair<ISourceBlock<T>, KeyValuePair<DataflowMessageHeader, T>> sourceAndMessage in reserved)
                     {
                         _messages.Enqueue(sourceAndMessage.Value.Value);
@@ -1038,10 +1038,10 @@ namespace System.Threading.Tasks.Dataflow
             /// </summary>
             private void ConsumeReservedMessagesGreedyBounded()
             {
-                Contract.Requires(_dataflowBlockOptions.Greedy, "This method may only be used in greedy mode.");
-                Contract.Requires(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
-                Contract.Requires(_nonGreedyState.ReservedSourcesTemp != null, "ReservedSourcesTemp should have been initialized.");
-                Contract.Requires(_boundingState != null, "Bounded state is required for bounded mode.");
+                Debug.Assert(_dataflowBlockOptions.Greedy, "This method may only be used in greedy mode.");
+                Debug.Assert(_nonGreedyState != null, "Non-greedy state is required for non-greedy mode.");
+                Debug.Assert(_nonGreedyState.ReservedSourcesTemp != null, "ReservedSourcesTemp should have been initialized.");
+                Debug.Assert(_boundingState != null, "Bounded state is required for bounded mode.");
                 Common.ContractAssertMonitorStatus(IncomingLock, held: false);
 
                 // Consume the reserved items and store the data.
@@ -1074,7 +1074,7 @@ namespace System.Threading.Tasks.Dataflow
                     // Increment the bounding count with the number of consumed messages 
                     if (_boundingState != null) _boundingState.CurrentCount += consumedCount;
 
-                    // Enqueue the consumed mesasages
+                    // Enqueue the consumed messages
                     foreach (KeyValuePair<ISourceBlock<T>, KeyValuePair<DataflowMessageHeader, T>> sourceAndMessage in reserved)
                     {
                         // If we didn't consume this message, the KeyValuePai will be default, i.e. the source will be null
@@ -1125,7 +1125,7 @@ namespace System.Threading.Tasks.Dataflow
             /// <param name="numItemsRemoved">The number of items removed.</param>
             internal void OnItemsRemoved(int numItemsRemoved)
             {
-                Contract.Requires(numItemsRemoved > 0, "Should only be called for a positive number of items removed.");
+                Debug.Assert(numItemsRemoved > 0, "Should only be called for a positive number of items removed.");
                 Common.ContractAssertMonitorStatus(IncomingLock, held: false);
 
                 // If we're bounding, we need to know when an item is removed so that we

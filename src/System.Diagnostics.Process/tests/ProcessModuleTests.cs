@@ -22,27 +22,52 @@ namespace System.Diagnostics.Tests
                 Assert.NotNull(module.FileName);
                 Assert.NotEmpty(module.FileName);
 
-                Assert.InRange(module.BaseAddress.ToInt64(), 0, long.MaxValue);
-                Assert.InRange(module.EntryPointAddress.ToInt64(), 0, long.MaxValue);
+                Assert.InRange(module.BaseAddress.ToInt64(), long.MinValue, long.MaxValue);
+                Assert.InRange(module.EntryPointAddress.ToInt64(), long.MinValue, long.MaxValue);
                 Assert.InRange(module.ModuleMemorySize, 0, long.MaxValue);
             }
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.AnyUnix)]
-        public void TestModulesContainsCorerun()
+        [SkipOnTargetFramework(TargetFrameworkMonikers.UapNotUapAot, "Process.Modules is not supported on uap")]
+        public void Modules_Get_ContainsHostFileName()
         {
             ProcessModuleCollection modules = Process.GetCurrentProcess().Modules;
-            Assert.Contains(modules.Cast<ProcessModule>(), m => m.FileName.Contains("corerun"));
+            Assert.Contains(modules.Cast<ProcessModule>(), m => m.FileName.Contains(HostRunnerName));
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Linux)] // OSX only includes the main module
+        [PlatformSpecific(TestPlatforms.Linux)] // OSX only includes the main module
         public void TestModulesContainsUnixNativeLibs()
         {
             ProcessModuleCollection modules = Process.GetCurrentProcess().Modules;
             Assert.Contains(modules.Cast<ProcessModule>(), m => m.FileName.Contains("libcoreclr"));
             Assert.Contains(modules.Cast<ProcessModule>(), m => m.FileName.Contains("System.Native"));
+        }
+
+        [Fact]
+        public void Modules_GetMultipleTimes_ReturnsSameInstance()
+        {
+            Process currentProcess = Process.GetCurrentProcess();
+            Assert.Same(currentProcess.Modules, currentProcess.Modules);
+        }
+
+        [Fact]
+        public void Modules_GetNotStarted_ThrowsInvalidOperationException()
+        {
+            var process = new Process();
+            Assert.Throws<InvalidOperationException>(() => process.Modules);
+        }
+
+        [Fact]
+        public void ModuleCollectionSubClass_DefaultConstructor_Success()
+        {
+            Assert.Empty(new ModuleCollectionSubClass());
+        }
+
+        public class ModuleCollectionSubClass : ProcessModuleCollection
+        {
+            public ModuleCollectionSubClass() : base() { }
         }
     }
 }

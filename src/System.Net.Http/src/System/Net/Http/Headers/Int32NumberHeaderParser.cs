@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Diagnostics;
-using System.Diagnostics.Contracts;
 using System.Globalization;
 
 namespace System.Net.Http.Headers
@@ -43,7 +42,7 @@ namespace System.Net.Http.Headers
             }
 
             int result = 0;
-            if (!HeaderUtilities.TryParseInt32(value.Substring(startIndex, numberLength), out result))
+            if (!HeaderUtilities.TryParseInt32(value, startIndex, numberLength, out result))
             {
                 return 0;
             }

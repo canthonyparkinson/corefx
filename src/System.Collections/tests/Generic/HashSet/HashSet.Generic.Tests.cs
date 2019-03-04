@@ -11,17 +11,11 @@ namespace System.Collections.Tests
     /// <summary>
     /// Contains tests that ensure the correctness of the HashSet class.
     /// </summary>
-    public abstract class HashSet_Generic_Tests<T> : ISet_Generic_Tests<T>
+    public abstract partial class HashSet_Generic_Tests<T> : ISet_Generic_Tests<T>
     {
         #region ISet<T> Helper Methods
 
-        protected override bool ResetImplemented
-        {
-            get
-            {
-                return true;
-            }
-        }
+        protected override bool ResetImplemented => true;
 
         protected override ISet<T> GenericISetFactory()
         {
@@ -94,7 +88,7 @@ namespace System.Collections.Tests
         [MemberData(nameof(ValidCollectionSizes))]
         public void HashSet_Generic_Constructor_HashSet_SparselyFilled(int count)
         {
-            HashSet<T> source = (HashSet <T>)CreateEnumerable(EnumerableType.HashSet, null, count, 0, 0);
+            HashSet<T> source = (HashSet<T>)CreateEnumerable(EnumerableType.HashSet, null, count, 0, 0);
             List<T> sourceElements = source.ToList();
             foreach (int i in NonSquares(count))
                 source.Remove(sourceElements[i]);// Unevenly spaced survivors increases chance of catching any spacing-related bugs.
@@ -269,6 +263,72 @@ namespace System.Collections.Tests
             set.CopyTo(arr1);
             set.CopyTo(arr2, 0);
             Assert.True(arr1.SequenceEqual(arr2));
+        }
+
+        #endregion
+
+        #region CreateSetComparer
+
+        [Fact]
+        public void SetComparer_SetEqualsTests()
+        {
+            List<T> objects = new List<T>() { CreateT(1), CreateT(2), CreateT(3), CreateT(4), CreateT(5), CreateT(6) };
+
+            var set = new HashSet<HashSet<T>>()
+            {
+                new HashSet<T> { objects[0], objects[1], objects[2] },
+                new HashSet<T> { objects[3], objects[4], objects[5] }
+            };
+
+            var noComparerSet = new HashSet<HashSet<T>>()
+            {
+                new HashSet<T> { objects[0], objects[1], objects[2] },
+                new HashSet<T> { objects[3], objects[4], objects[5] }
+            };
+
+            var comparerSet1 = new HashSet<HashSet<T>>(HashSet<T>.CreateSetComparer())
+            {
+                new HashSet<T> { objects[0], objects[1], objects[2] },
+                new HashSet<T> { objects[3], objects[4], objects[5] }
+            };
+
+            var comparerSet2 = new HashSet<HashSet<T>>(HashSet<T>.CreateSetComparer())
+            {
+                new HashSet<T> { objects[3], objects[4], objects[5] },
+                new HashSet<T> { objects[0], objects[1], objects[2] }
+            };
+
+            Assert.False(noComparerSet.SetEquals(set));
+            Assert.True(comparerSet1.SetEquals(set));
+            Assert.True(comparerSet2.SetEquals(set));
+        }
+
+        [Fact]
+        public void SetComparer_SequenceEqualTests()
+        {
+            List<T> objects = new List<T>() { CreateT(1), CreateT(2), CreateT(3), CreateT(4), CreateT(5), CreateT(6) };
+
+            var set = new HashSet<HashSet<T>>()
+            {
+                new HashSet<T> { objects[0], objects[1], objects[2] },
+                new HashSet<T> { objects[3], objects[4], objects[5] }
+            };
+
+            var noComparerSet = new HashSet<HashSet<T>>()
+            {
+                new HashSet<T> { objects[0], objects[1], objects[2] },
+                new HashSet<T> { objects[3], objects[4], objects[5] }
+            };
+
+            var comparerSet = new HashSet<HashSet<T>>(HashSet<T>.CreateSetComparer())
+            {
+                new HashSet<T> { objects[0], objects[1], objects[2] },
+                new HashSet<T> { objects[3], objects[4], objects[5] }
+            };
+
+            Assert.False(noComparerSet.SequenceEqual(set));
+            Assert.True(noComparerSet.SequenceEqual(set, HashSet<T>.CreateSetComparer()));
+            Assert.False(comparerSet.SequenceEqual(set));
         }
 
         #endregion

@@ -5,14 +5,14 @@
 using System.IO;
 using System.Net.Sockets;
 using System.Net.Test.Common;
-using System.Net.Tests;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
-using Xunit;
 
 namespace System.Net.Security.Tests
 {
+    using Configuration = System.Net.Test.Common.Configuration;
+
     // Callback method that is called when the server receives data from a connected client.  
     // The callback method should return a byte array and the number of bytes to send from that array.
     public delegate void DummyTcpServerReceiveCallback(byte[] bufferReceived, int bytesReceived, Stream stream);
@@ -22,6 +22,7 @@ namespace System.Net.Security.Tests
     // specified by a callback method.
     public class DummyTcpServer : IDisposable
     {
+        private readonly string _creationStack = Environment.StackTrace;
         private VerboseTestLogging _log;
         private TcpListener _listener;
         private bool _useSsl;
@@ -108,14 +109,12 @@ namespace System.Net.Security.Tests
                 _log.WriteLine(
                     "Server disconnecting from client during authentication.  No shared SSL/TLS algorithm. ({0})",
                     authEx);
+                state.Dispose();
             }
             catch (Exception ex)
             {
                 _log.WriteLine("Server disconnecting from client during authentication.  Exception: {0}",
                     ex.Message);
-            }
-            finally
-            {
                 state.Dispose();
             }
         }
@@ -148,7 +147,7 @@ namespace System.Net.Security.Tests
 
 
                     SslStream sslStream = null;
-                    X509Certificate2 certificate = CertificateConfiguration.GetServerCertificate();
+                    X509Certificate2 certificate = Configuration.Certificates.GetServerCertificate();
 
                     try
                     {
@@ -233,6 +232,12 @@ namespace System.Net.Security.Tests
             {
                 state.Dispose();
                 return;
+            }
+            catch (InvalidOperationException e)
+            {
+                throw new InvalidOperationException(
+                    $"Exception in {nameof(DummyTcpServer)} created with stack: {_creationStack}",
+                    e);
             }
         }
 

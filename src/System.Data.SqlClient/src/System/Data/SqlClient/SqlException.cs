@@ -11,23 +11,58 @@ using System.ComponentModel;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.Serialization;
 using System.Text; // StringBuilder
 
 namespace System.Data.SqlClient
 {
-    public sealed class SqlException : System.Data.Common.DbException
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.Data, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
+    public sealed partial class SqlException : System.Data.Common.DbException
     {
         private const string OriginalClientConnectionIdKey = "OriginalClientConnectionId";
         private const string RoutingDestinationKey = "RoutingDestination";
+        private const int SqlExceptionHResult = unchecked((int)0x80131904);
 
         private SqlErrorCollection _errors;
         private Guid _clientConnectionId = Guid.Empty;
 
         private SqlException(string message, SqlErrorCollection errorCollection, Exception innerException, Guid conId) : base(message, innerException)
         {
-            HResult = unchecked((int)0x80131904);
+            HResult = SqlExceptionHResult;
             _errors = errorCollection;
             _clientConnectionId = conId;
+        }
+
+        private SqlException(SerializationInfo si, StreamingContext sc) : base(si, sc) 
+        {
+            HResult = SqlExceptionHResult;
+            foreach (SerializationEntry siEntry in si)
+            {
+                if ("ClientConnectionId" == siEntry.Name) 
+                {
+                    _clientConnectionId = (Guid)siEntry.Value;
+                    break;
+                }
+            }
+        }
+
+        public override void GetObjectData(SerializationInfo si, StreamingContext context)
+        {
+            base.GetObjectData(si, context);
+            si.AddValue("Errors", null); // Not specifying type to enable serialization of null value of non-serializable type
+            si.AddValue("ClientConnectionId", _clientConnectionId, typeof(Guid));
+
+            // Writing sqlerrors to base exception data table
+            for (int i = 0; i < Errors.Count; i++)
+            {
+                string key = "SqlError " + (i + 1);
+                if (Data.Contains(key))
+                {
+                    Data.Remove(key);
+                }
+                Data.Add(key, Errors[i].ToString());
+            }
         }
 
         // runtime will call even if private...
@@ -54,37 +89,37 @@ namespace System.Data.SqlClient
 
         public byte Class
         {
-            get { return this.Errors[0].Class; }
+            get { return Errors.Count > 0 ? this.Errors[0].Class : default; }
         }
 
         public int LineNumber
         {
-            get { return this.Errors[0].LineNumber; }
+            get { return Errors.Count > 0 ? Errors[0].LineNumber : default; }
         }
 
         public int Number
         {
-            get { return this.Errors[0].Number; }
+            get { return Errors.Count > 0 ? Errors[0].Number : default; }
         }
 
         public string Procedure
         {
-            get { return this.Errors[0].Procedure; }
+            get { return Errors.Count > 0 ? Errors[0].Procedure : default; }
         }
 
         public string Server
         {
-            get { return this.Errors[0].Server; }
+            get { return Errors.Count > 0 ? Errors[0].Server : default; }
         }
 
         public byte State
         {
-            get { return this.Errors[0].State; }
+            get { return Errors.Count > 0 ? Errors[0].State : default; }
         }
 
         override public string Source
         {
-            get { return this.Errors[0].Source; }
+            get { return Errors.Count > 0 ? Errors[0].Source : default; }
         }
 
         public override string ToString()
@@ -94,7 +129,7 @@ namespace System.Data.SqlClient
             sb.AppendFormat(SQLMessage.ExClientConnectionId(), _clientConnectionId);
 
             // Append the error number, state and class if the server provided it
-            if (Number != 0)
+            if (Errors.Count > 0 && Number != 0)
             {
                 sb.AppendLine();
                 sb.AppendFormat(SQLMessage.ExErrorNumberStateClass(), Number, State, Class);
@@ -117,12 +152,12 @@ namespace System.Data.SqlClient
             return sb.ToString();
         }
 
-        static internal SqlException CreateException(SqlErrorCollection errorCollection, string serverVersion)
+        internal static SqlException CreateException(SqlErrorCollection errorCollection, string serverVersion)
         {
             return CreateException(errorCollection, serverVersion, Guid.Empty);
         }
 
-        static internal SqlException CreateException(SqlErrorCollection errorCollection, string serverVersion, SqlInternalConnectionTds internalConnection, Exception innerException = null)
+        internal static SqlException CreateException(SqlErrorCollection errorCollection, string serverVersion, SqlInternalConnectionTds internalConnection, Exception innerException = null)
         {
             Guid connectionId = (internalConnection == null) ? Guid.Empty : internalConnection._clientConnectionId;
             var exception = CreateException(errorCollection, serverVersion, connectionId, innerException);
@@ -143,7 +178,7 @@ namespace System.Data.SqlClient
             return exception;
         }
 
-        static internal SqlException CreateException(SqlErrorCollection errorCollection, string serverVersion, Guid conId, Exception innerException = null)
+        internal static SqlException CreateException(SqlErrorCollection errorCollection, string serverVersion, Guid conId, Exception innerException = null)
         {
             Debug.Assert(null != errorCollection && errorCollection.Count > 0, "no errorCollection?");
 
@@ -172,7 +207,7 @@ namespace System.Data.SqlClient
             }
             exception.Data.Add("HelpLink.EvtSrc", "MSSQLServer");
             exception.Data.Add("HelpLink.EvtID", errorCollection[0].Number.ToString(CultureInfo.InvariantCulture));
-            exception.Data.Add("HelpLink.BaseHelpUrl", "http://go.microsoft.com/fwlink");
+            exception.Data.Add("HelpLink.BaseHelpUrl", "https://go.microsoft.com/fwlink");
             exception.Data.Add("HelpLink.LinkId", "20476");
 
             return exception;

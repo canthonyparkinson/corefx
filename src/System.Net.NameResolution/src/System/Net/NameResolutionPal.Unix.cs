@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.Internals;
 using System.Net.Sockets;
@@ -12,26 +13,8 @@ namespace System.Net
 {
     internal static partial class NameResolutionPal
     {
-        private static SocketError GetSocketErrorForErrno(int errno)
-        {
-            switch (errno)
-            {
-                case 0:
-                    return SocketError.Success;
-                case (int)Interop.Sys.GetHostErrorCodes.HOST_NOT_FOUND:
-                    return SocketError.HostNotFound;
-                case (int)Interop.Sys.GetHostErrorCodes.NO_DATA:
-                    return SocketError.NoData;
-                case (int)Interop.Sys.GetHostErrorCodes.NO_RECOVERY:
-                    return SocketError.NoRecovery;
-                case (int)Interop.Sys.GetHostErrorCodes.TRY_AGAIN:
-                    return SocketError.TryAgain;
-                default:
-                    Debug.Fail("Unexpected errno: " + errno.ToString());
-                    return SocketError.SocketError;
-            }
-        }
-
+        public const bool SupportsGetAddrInfoAsync = false;
+        
         private static SocketError GetSocketErrorForNativeError(int error)
         {
             switch (error)
@@ -72,21 +55,44 @@ namespace System.Net
             }
             else
             {
-                ipAddresses = new IPAddress[numAddresses];
+                //
+                // getaddrinfo returns multiple entries per address, for each socket type (datagram, stream, etc.).
+                // Our callers expect just one entry for each address.  So we need to deduplicate the results.
+                // It's important to keep the addresses in order, since they are returned in the order in which
+                // connections should be attempted.
+                // 
+                // We assume that the list returned by getaddrinfo is relatively short; after all, the intent is that
+                // the caller may need to attempt to contact every address in the list before giving up on a connection
+                // attempt.  So an O(N^2) algorithm should be fine here.  Keep in mind that any "better" algorithm 
+                // is likely to involve extra allocations, hashing, etc., and so will probably be more expensive than
+                // this one in the typical (short list) case.
+                //
+                var nativeAddresses = new Interop.Sys.IPAddress[hostEntry.IPAddressCount];
+                var nativeAddressCount = 0;
 
-                void* addressListHandle = hostEntry.AddressListHandle;
-                var nativeIPAddress = default(Interop.Sys.IPAddress);
-                for (int i = 0; i < numAddresses; i++)
+                var addressListHandle = hostEntry.AddressListHandle;
+                for (int i = 0; i < hostEntry.IPAddressCount; i++)
                 {
+                    var nativeIPAddress = default(Interop.Sys.IPAddress);
                     int err = Interop.Sys.GetNextIPAddress(&hostEntry, &addressListHandle, &nativeIPAddress);
                     Debug.Assert(err == 0);
 
-                    ipAddresses[i] = nativeIPAddress.GetIPAddress();
+                    if (Array.IndexOf(nativeAddresses, nativeIPAddress, 0, nativeAddressCount) == -1)
+                    {
+                        nativeAddresses[nativeAddressCount] = nativeIPAddress;
+                        nativeAddressCount++;
+                    }
+                }
+
+                ipAddresses = new IPAddress[nativeAddressCount];
+                for (int i = 0; i < nativeAddressCount; i++)
+                {
+                    ipAddresses[i] = nativeAddresses[i].GetIPAddress();
                 }
             }
 
             int numAliases;
-            for (numAliases = 0; hostEntry.Aliases[numAliases] != null; numAliases++)
+            for (numAliases = 0; hostEntry.Aliases != null && hostEntry.Aliases[numAliases] != null; numAliases++)
             {
             }
 
@@ -114,35 +120,15 @@ namespace System.Net
                 Aliases = aliases
             };
         }
-
-        public static unsafe IPHostEntry GetHostByName(string hostName)
-        {
-            Interop.Sys.HostEntry entry;
-            int err = Interop.Sys.GetHostByName(hostName, &entry);
-            if (err != 0)
-            {
-                throw SocketExceptionFactory.CreateSocketException(GetSocketErrorForErrno(err), err);
-            }
-
-            return CreateIPHostEntry(entry);
-        }
-
-        public static unsafe IPHostEntry GetHostByAddr(IPAddress addr)
-        {
-            // TODO #2891: Optimize this (or decide if this legacy code can be removed):
-            Interop.Sys.IPAddress address = addr.GetNativeIPAddress();
-            Interop.Sys.HostEntry entry;
-            int err = Interop.Sys.GetHostByAddress(&address, &entry);
-            if (err != 0)
-            {
-                throw SocketExceptionFactory.CreateSocketException(GetSocketErrorForErrno(err), err);
-            }
-
-            return CreateIPHostEntry(entry);
-        }
-
+    
         public static unsafe SocketError TryGetAddrInfo(string name, out IPHostEntry hostinfo, out int nativeErrorCode)
         {
+            if (name == "")
+            {
+                // To match documented behavior on Windows, if an empty string is passed in, use the local host's name.
+                name = Dns.GetHostName();
+            }
+
             Interop.Sys.HostEntry entry;
             int result = Interop.Sys.GetHostEntryForName(name, &entry);
             if (result != 0)
@@ -152,60 +138,51 @@ namespace System.Net
                 return GetSocketErrorForNativeError(result);
             }
 
-            try
-            {
-                string canonicalName = Marshal.PtrToStringAnsi((IntPtr)entry.CanonicalName);
-
-                hostinfo = new IPHostEntry
-                {
-                    HostName = string.IsNullOrEmpty(canonicalName) ? name : canonicalName,
-                    Aliases = Array.Empty<string>(),
-                    AddressList = new IPAddress[entry.IPAddressCount]
-                };
-
-                void* addressListHandle = entry.AddressListHandle;
-                var nativeIPAddress = default(Interop.Sys.IPAddress);
-                for (int i = 0; i < entry.IPAddressCount; i++)
-                {
-                    int err = Interop.Sys.GetNextIPAddress(&entry, &addressListHandle, &nativeIPAddress);
-                    Debug.Assert(err == 0);
-
-                    hostinfo.AddressList[i] = nativeIPAddress.GetIPAddress();
-                }
-            }
-            finally
-            {
-                Interop.Sys.FreeHostEntry(&entry);
-            }
+            hostinfo = CreateIPHostEntry(entry);
 
             nativeErrorCode = 0;
             return SocketError.Success;
+        }
+
+        internal static void GetAddrInfoAsync(DnsResolveAsyncResult asyncResult)
+        {
+            throw new NotSupportedException();
         }
 
         public static unsafe string TryGetNameInfo(IPAddress addr, out SocketError socketError, out int nativeErrorCode)
         {
             byte* buffer = stackalloc byte[Interop.Sys.NI_MAXHOST + 1 /*for null*/];
 
-            // TODO #2891: Remove the copying step to improve performance. This requires a change in the contracts.
-            byte[] addressBuffer = addr.GetAddressBytes();
-
-            int error;
-            fixed (byte* rawAddress = addressBuffer)
+            byte isIPv6;
+            int rawAddressLength;
+            if (addr.AddressFamily == AddressFamily.InterNetwork)
             {
-                error = Interop.Sys.GetNameInfo(
-                    rawAddress,
-                    unchecked((uint)addressBuffer.Length),
-                    addr.AddressFamily == AddressFamily.InterNetworkV6,
-                    buffer,
-                    Interop.Sys.NI_MAXHOST,
-                    null,
-                    0,
-                    Interop.Sys.GetNameInfoFlags.NI_NAMEREQD);
+                isIPv6 = 0;
+                rawAddressLength = IPAddressParserStatics.IPv4AddressBytes;
             }
+            else
+            {
+                isIPv6 = 1;
+                rawAddressLength = IPAddressParserStatics.IPv6AddressBytes;
+            }
+
+            byte* rawAddress = stackalloc byte[rawAddressLength];
+            addr.TryWriteBytes(new Span<byte>(rawAddress, rawAddressLength), out int bytesWritten);
+            Debug.Assert(bytesWritten == rawAddressLength);
+
+            int error = Interop.Sys.GetNameInfo(
+                rawAddress,
+                (uint)rawAddressLength,
+                isIPv6,
+                buffer,
+                Interop.Sys.NI_MAXHOST,
+                null,
+                0,
+                Interop.Sys.GetNameInfoFlags.NI_NAMEREQD);
 
             socketError = GetSocketErrorForNativeError(error);
             nativeErrorCode = error;
-           return socketError != SocketError.Success ? null : Marshal.PtrToStringAnsi((IntPtr)buffer);
+            return socketError != SocketError.Success ? null : Marshal.PtrToStringAnsi((IntPtr)buffer);
         }
 
         public static string GetHostName()

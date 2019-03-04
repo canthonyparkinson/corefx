@@ -3,15 +3,16 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Internal.Cryptography.Pal
 {
     internal interface IStorePal : IDisposable
     {
-        byte[] Export(X509ContentType contentType, string password);
-        void CopyTo(X509Certificate2Collection collection);
+        void CloneTo(X509Certificate2Collection collection);
         void Add(ICertificatePal cert);
         void Remove(ICertificatePal cert);
+        SafeHandle SafeHandle { get; }
     }
 }

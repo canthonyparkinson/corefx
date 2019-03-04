@@ -13,6 +13,7 @@ namespace System.Security.Cryptography
     /// The CurveType property determines whether the curve is a named curve or an explicit curve 
     /// which is either a prime curve or a characteristic-2 curve.
     /// </remarks>
+    [DebuggerDisplay("ECCurve: {Oid}")]
     public partial struct ECCurve
     {
         /// <summary>
@@ -128,7 +129,7 @@ namespace System.Security.Cryptography
         /// <summary>
         /// Create a curve from the given cref="Oid" value.
         /// </summary>
-        /// <param name="oidFriendlyName">The Oid value to use.</param>
+        /// <param name="oidValue">The Oid value to use.</param>
         /// <returns>An ECCurve representing a named curve.</returns>
         public static ECCurve CreateFromValue(string oidValue)
         {

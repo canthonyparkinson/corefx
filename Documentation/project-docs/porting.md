@@ -74,40 +74,37 @@ Feature owners reserve the right to call out what they don't want to support on 
 
 This list, while not complete, is meant as a reference point. We'll add to it as we refine our porting plan. Also, just because something is currently not implemented, doesn't imply it's intentionally unsupported. Feel free to [file an issue](https://github.com/dotnet/corefx/issues/new) to ask for specific APIs and technologies. Porting requests are generally marked as [port-to-core](https://github.com/dotnet/corefx/issues?q=is%3Aopen+is%3Aissue+label%3Aport-to-core).
 
+Binary Serialization is supported post 1.1, however we do not support cross-platform binary serialization. For new code you may want to consider other serialization approaches such as data contract serialization, XML serialization, JSON.NET, and protobuf-net.
+
 Technology                 | More information
 ---------------------------|-----------------------------------
 AppDomains                 | [Details](#app_domains)
 Remoting                   | [Details](#remoting)
-Binary Serialization       | [Details](#binary-serialization)
 Code Access Security (CAS) | [Details](#code-access-security-cas)
 Security Transparency      | [Details](#security-transparency)
 
 ### App Domains
 
-**Justification**. AppDomains require runtime support and are generally quite expensive. While still implemented by CoreCLR it's not available in .NET Native and we don't plan on adding this capability.
+**Justification**. AppDomains require runtime support and are generally quite expensive. They are not implemented in .NET Core or .NET Native. We do not plan on adding this capability in future.
 
-**Replacement**. AppDomains were used for different features; for isolation we recommend processes and/or containers. For dynamic loading, we provide `AssemblyLoadContext`. Information (such as the name and base directory) is provided by APIs on other types, for instance `AppContext.BaseDirectory `. Some scenarios, such as getting the list of loaded are unsupported as they are inherently fragile.
+**Replacement**. AppDomains were used for different features; for isolation we recommend processes and/or containers. For dynamic loading, we provide `AssemblyLoadContext`. Information (such as the name and base directory) is provided by APIs on other types, for instance `AppContext.BaseDirectory`. Some scenarios, such as getting the list of loaded assemblies are unsupported as they are inherently fragile.
+
+To make code migration from .NET Framework easier, we have exposed some of the `AppDomain` API surface in .NET Core and .NET Native. Some of the APIs work fine (e.g. `UnhandledException`), some of them do nothing (e.g. `SetCachePath`) and some of them throw `PlatformNotSupportedException` (e.g. `CreateDomain`). See more details about particular API differences in [TODO](https://github.com/dotnet/corefx/issues/18405).
 
 ### Remoting
 
 **Justification**. The idea of .NET remoting -- which is transparent remote procedure calls -- has been identified as a problematic architecture. Outside of that realm, it's also used for cross AppDomain communication which is no longer supported. On top of that, remoting requires runtime support and is quite heavyweight.
 
-**Replacement**. For communication across processes, inter-process communication (IPC) should be used, such as pipes or memory mapped files. Across machines, you should use a network based solution, preferably a low-overhead plain text protocol such as HTTP.
-
-### Binary Serialization
-
-**Justification**. After a decade of servicing we've learned that serialization is incredibly complicated and a huge compatibility burden for the types supporting it. Thus, we made the decision that serialization should be a protocol implemented on top of the available public APIs. However, binary serialization requires intimate knowledge of the types as it allows to serialize object graphs including private state.
-
-**Replacement**. Choose the serialization technology that fits your goals for formatting and footprint. Popular choices include data contract serialization, XML serialization, JSON.NET, and protobuf-net.
+**Replacement**. For communication across processes, inter-process communication (IPC) should be used, such as pipes or memory mapped files. Across machines, you should use a network based solution, preferably `System.Net.Sockets` (see sample - [TODO](https://github.com/dotnet/corefx/issues/18394)).
 
 ### Code Access Security (CAS)
 
-**Justification**. Sand-boxing, i.e. relying on the runtime or the framework to constrain which resources a managed application can run, is considered a non-goal for .NET Core. We've already state previously that relying on sand-boxing for security reasons isn't an approach we're feeling comfortable with; there are simply too many pieces in object oriented framework that can result in elevation of privileges. Thus we don't treat CAS as security boundary anymore. On top of that, it makes the implementation more complicated and often has performance implications for the happy path.
+**Justification**. Sandboxing, i.e. relying on the runtime or the framework to constrain which resources a managed application or library can run is [not supported on .NET Framework](https://msdn.microsoft.com/en-us/library/c5tk9z76(v=vs.110).aspx) and therefore is also not supported on .NET Core or .NET Native. We believe that there are simply too many pieces in the .NET Framework and runtime that can result in elevation of privileges. Thus we don't treat [CAS as security boundary](https://msdn.microsoft.com/en-us/library/c5tk9z76(v=vs.110).aspx) anymore. On top of that, it makes the implementation more complicated and often has correctness performance implications for applications that don’t intend to use it.
 
-**Replacement**. Use operating system provided security boundaries, such as user accounts for running processes with the least set of privileges.
+**Replacement**. Use operating system provided security boundaries, such as virtualization, containers, or user accounts for running processes with the least set of privileges.
 
 ### Security Transparency
 
-**Justification**. Similar to CAS, this feature allows separating sand-boxed code from security critical code in a declarative fashion. This feature was heavily used by Silverlight. 
+**Justification**. Similar to CAS, this feature allows separating sandboxed code from security critical code in a declarative fashion, but is [no longer supported as a security boundary](https://msdn.microsoft.com/en-us/library/ee191569(v=vs.110).aspx). This feature was heavily used by Silverlight. 
 
-**Replacement**. Use operating system provided security boundaries, such as user accounts for running processes with the least set of privileges.
+**Replacement**. Use operating system provided security boundaries, such as virtualization, containers, or user accounts for running processes with the least set of privileges.

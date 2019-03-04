@@ -3,6 +3,8 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -67,6 +69,24 @@ namespace System.ComponentModel.EventBasedAsync.Tests
             {
                 SynchronizationContext.SetSynchronizationContext(orignal);
             }
+        }
+
+        [Fact]
+        public async Task RunWorkerAsync_NoOnWorkHandler_SetsResultToNull()
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            var backgroundWorker = new BackgroundWorker { WorkerReportsProgress = true };
+            backgroundWorker.RunWorkerCompleted += (sender, e) =>
+            {
+                Assert.Null(e.Result);
+                Assert.False(backgroundWorker.IsBusy);
+                tcs.SetResult(true);
+            };
+
+            backgroundWorker.RunWorkerAsync();
+
+            await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(10))); // Usually takes 100th of a sec
+            Assert.True(tcs.Task.IsCompleted);
         }
 
         #region TestCancelAsync
@@ -161,8 +181,9 @@ namespace System.ComponentModel.EventBasedAsync.Tests
                 {
                     try
                     {
-                        TestException ex = Assert.Throws<TestException>(() => e.Result);
-                        Assert.Equal(expectedExceptionMsg, ex.Message);
+                        TargetInvocationException ex = Assert.Throws<TargetInvocationException>(() => e.Result);
+                        Assert.True(ex.InnerException is TestException);
+                        Assert.Equal(expectedExceptionMsg, ex.InnerException.Message);
                     }
                     finally
                     {
@@ -279,6 +300,16 @@ namespace System.ComponentModel.EventBasedAsync.Tests
             }
 
             Assert.Equal(expectedProgress, actualProgress);
+        }
+
+        [Fact]
+        public void ReportProgress_NoProgressHandle_Nop()
+        {
+            var backgroundWorker = new BackgroundWorker { WorkerReportsProgress = true };
+            foreach (int i in new int[] { 1, 2, 3, 4, 5 })
+            {
+                backgroundWorker.ReportProgress(i);
+            }
         }
 
         [Fact]

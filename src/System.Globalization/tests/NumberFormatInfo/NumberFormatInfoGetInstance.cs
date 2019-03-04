@@ -11,7 +11,7 @@ namespace System.Globalization.Tests
     {
         public static IEnumerable<object[]> GetInstance_TestData()
         {
-            CultureInfo frFRCulture = new CultureInfo("fr-FR");
+            CultureInfo frFRCulture = CultureInfo.GetCultureInfo("fr-FR");
             yield return new object[] { frFRCulture, frFRCulture.NumberFormat };
             yield return new object[] { frFRCulture.NumberFormat, frFRCulture.NumberFormat };
             yield return new object[] { new CustomFormatProvider(), CustomFormatProvider.CustomFormat };
@@ -24,12 +24,38 @@ namespace System.Globalization.Tests
         [MemberData(nameof(GetInstance_TestData))]
         public void GetInstance(IFormatProvider formatProvider, NumberFormatInfo expected)
         {
-            Assert.Equal(expected, NumberFormatInfo.GetInstance(formatProvider));
+            NumberFormatInfo nfi = NumberFormatInfo.GetInstance(formatProvider);
+
+            Assert.Equal(expected.CurrencyDecimalDigits, nfi.CurrencyDecimalDigits);
+            Assert.Equal(expected.CurrencyDecimalSeparator, nfi.CurrencyDecimalSeparator);
+            Assert.Equal(expected.CurrencyGroupSeparator, nfi.CurrencyGroupSeparator);
+            Assert.Equal(expected.CurrencyGroupSizes, nfi.CurrencyGroupSizes);
+            Assert.Equal(expected.CurrencyNegativePattern, nfi.CurrencyNegativePattern);
+            Assert.Equal(expected.CurrencyPositivePattern, nfi.CurrencyPositivePattern);
+            Assert.Equal(expected.CurrencySymbol, nfi.CurrencySymbol);
+            Assert.Equal(expected.NaNSymbol, nfi.NaNSymbol);
+            Assert.Equal(expected.NegativeInfinitySymbol, nfi.NegativeInfinitySymbol);
+            Assert.Equal(expected.NegativeSign, nfi.NegativeSign);
+            Assert.Equal(expected.NumberDecimalDigits, nfi.NumberDecimalDigits);
+            Assert.Equal(expected.NumberDecimalSeparator, nfi.NumberDecimalSeparator);
+            Assert.Equal(expected.NumberGroupSeparator, nfi.NumberGroupSeparator);
+            Assert.Equal(expected.NumberGroupSizes, nfi.NumberGroupSizes);
+            Assert.Equal(expected.NumberNegativePattern, nfi.NumberNegativePattern);
+            Assert.Equal(expected.PercentDecimalDigits, nfi.PercentDecimalDigits);
+            Assert.Equal(expected.PercentDecimalSeparator, nfi.PercentDecimalSeparator);
+            Assert.Equal(expected.PercentGroupSeparator, nfi.PercentGroupSeparator);
+            Assert.Equal(expected.PercentGroupSizes, nfi.PercentGroupSizes);
+            Assert.Equal(expected.PercentNegativePattern, nfi.PercentNegativePattern);
+            Assert.Equal(expected.PercentPositivePattern, nfi.PercentPositivePattern);
+            Assert.Equal(expected.PercentSymbol, nfi.PercentSymbol);
+            Assert.Equal(expected.PositiveInfinitySymbol, nfi.PositiveInfinitySymbol);
+            Assert.Equal(expected.PerMilleSymbol, nfi.PerMilleSymbol);
+            Assert.Equal(expected.PositiveSign, nfi.PositiveSign);
         }
 
         private class CustomFormatProvider : IFormatProvider
         {
-            public static NumberFormatInfo CustomFormat { get; } = new CultureInfo("fr-FR").NumberFormat;
+            public static NumberFormatInfo CustomFormat { get; } = CultureInfo.GetCultureInfo("fr-FR").NumberFormat;
 
             public object GetFormat(Type formatType) => CustomFormat;
         }

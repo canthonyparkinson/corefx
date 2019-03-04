@@ -3,8 +3,8 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using Xunit;
 using Microsoft.Xunit.Performance;
+using Xunit;
 
 namespace System.Collections.Tests
 {
@@ -20,8 +20,7 @@ namespace System.Collections.Tests
             while (dict.Count < size)
             {
                 int key = rand.Next(500000, int.MaxValue);
-                if (!dict.ContainsKey(key))
-                    dict.Add(key, 0);
+                dict.TryAdd(key, 0);
             }
             return dict;
         }

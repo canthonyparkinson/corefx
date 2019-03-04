@@ -3,10 +3,13 @@
 // See the LICENSE file in the project root for more information.
 
 using System.ComponentModel;
+using System.Runtime.Serialization;
 
 namespace System.Net.Sockets
 {
     /// <summary>Provides socket exceptions to the application.</summary>
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public partial class SocketException : Win32Exception
     {
         /// <summary>The SocketError or Int32 specified when constructing the exception.</summary>
@@ -31,16 +34,20 @@ namespace System.Net.Sockets
         /// <summary>Creates a new instance of the <see cref='System.Net.Sockets.SocketException'/> class with the specified error code as SocketError.</summary>
         internal SocketException(SocketError socketError) : base(GetNativeErrorForSocketError(socketError))
         {
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, socketError, Message);
             _errorCode = socketError;
-
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print($"SocketException::.ctor(SocketError={socketError}):{Message}");
-            }
         }
 
         public override string Message => base.Message;
 
         public SocketError SocketErrorCode => _errorCode;
+
+        protected SocketException(SerializationInfo serializationInfo, StreamingContext streamingContext)
+            : base(serializationInfo, streamingContext)
+        {
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"{NativeErrorCode}:{Message}");
+        }
+
+        public override int ErrorCode => base.NativeErrorCode;
     }
 }

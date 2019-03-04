@@ -78,17 +78,28 @@ namespace System.Collections.Tests
         protected virtual bool ICollection_NonGeneric_SupportsSyncRoot => true;
 
         /// <summary>
-        /// Used for the ICollection_NonGeneric_SyncRootType_MatchesExcepted test. Most SyncRoots are created
-        /// using System.Threading.Interlocked.CompareExchange(ref _syncRoot, new Object(), null)
-        /// so we should test that the SyncRoot is the type we expect.
+        /// Used for ICollection_NonGeneric_SyncRoot tests. Some implementations (e.g. TempFileCollection)
+        /// return null for the SyncRoot property of an ICollection.
         /// </summary>
-        protected virtual Type ICollection_NonGeneric_SyncRootType => typeof(object);
+        protected virtual bool ICollection_NonGeneric_HasNullSyncRoot => false;
+
+        /// <summary>
+        /// Used for the ICollection_NonGeneric_CopyTo_IndexLargerThanArrayCount_ThrowsArgumentException tests. Some
+        /// implementations throw a different exception type (e.g. ArgumentOutOfRangeException).
+        /// </summary>
+        protected virtual Type ICollection_NonGeneric_CopyTo_IndexLargerThanArrayCount_ThrowType => typeof(ArgumentException);
+
+        /// <summary>
+        /// Used for the ICollection_NonGeneric_CopyTo_TwoDimensionArray_ThrowsException test. Some implementations
+        /// throw a different exception type (e.g. RankException by ImmutableArray)
+        /// </summary>
+        protected virtual Type ICollection_NonGeneric_CopyTo_TwoDimensionArray_ThrowType => typeof(ArgumentException);
 
         #endregion
 
         #region IEnumerable Helper Methods
 
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables => new List<ModifyEnumerable>();
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations) => new List<ModifyEnumerable>();
 
         protected override IEnumerable NonGenericIEnumerableFactory(int count) => NonGenericICollectionFactory(count);
 
@@ -122,25 +133,17 @@ namespace System.Collections.Tests
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void ICollection_NonGeneric_SyncRoot_NonNull(int count)
+        public void ICollection_NonGeneric_SyncRoot(int count)
         {
+            ICollection collection = NonGenericICollectionFactory(count);
             if (ICollection_NonGeneric_SupportsSyncRoot)
             {
-                ICollection collection = NonGenericICollectionFactory(count);
-                Assert.NotNull(collection.SyncRoot);
+                Assert.Equal(ICollection_NonGeneric_HasNullSyncRoot, collection.SyncRoot == null);
+                Assert.Same(collection.SyncRoot, collection.SyncRoot);
             }
-        }
-
-        [Theory]
-        [MemberData(nameof(ValidCollectionSizes))]
-        public void ICollection_NonGeneric_SyncRootConsistent(int count)
-        {
-            if (ICollection_NonGeneric_SupportsSyncRoot)
+            else
             {
-                ICollection collection = NonGenericICollectionFactory(count);
-                object syncRoot1 = collection.SyncRoot;
-                object syncRoot2 = collection.SyncRoot;
-                Assert.Same(syncRoot1, syncRoot2);
+                Assert.Throws<NotSupportedException>(() => collection.SyncRoot);
             }
         }
 
@@ -148,45 +151,11 @@ namespace System.Collections.Tests
         [MemberData(nameof(ValidCollectionSizes))]
         public void ICollection_NonGeneric_SyncRootUnique(int count)
         {
-            if (ICollection_NonGeneric_SupportsSyncRoot)
+            if (ICollection_NonGeneric_SupportsSyncRoot && !ICollection_NonGeneric_HasNullSyncRoot)
             {
                 ICollection collection1 = NonGenericICollectionFactory(count);
                 ICollection collection2 = NonGenericICollectionFactory(count);
                 Assert.NotSame(collection1.SyncRoot, collection2.SyncRoot);
-            }
-        }
-
-        [Theory]
-        [MemberData(nameof(ValidCollectionSizes))]
-        public void ICollection_NonGeneric_SyncRoot_MatchesExpectedType(int count)
-        {
-            if (ICollection_NonGeneric_SupportsSyncRoot)
-            {
-                ICollection collection = NonGenericICollectionFactory(count);
-                
-                Assert.IsType(ICollection_NonGeneric_SyncRootType, collection.SyncRoot);
-
-                if (ICollection_NonGeneric_SyncRootType == collection.GetType())
-                {
-                    // If we expect the SyncRoot to be the same type as the collection, 
-                    // the SyncRoot should be the same as the collection (e.g. HybridDictionary)
-                    Assert.Same(collection, collection.SyncRoot);
-                }
-                else
-                {
-                    Assert.NotSame(collection, collection.SyncRoot);
-                }
-            }
-        }
-
-        [Theory]
-        [MemberData(nameof(ValidCollectionSizes))]
-        public void ICollection_NonGeneric_SyncRoot_ThrowsNotSupportedException(int count)
-        {
-            if (!ICollection_NonGeneric_SupportsSyncRoot)
-            {
-                ICollection collection = NonGenericICollectionFactory(count);
-                Assert.Throws<NotSupportedException>(() => collection.SyncRoot);
             }
         }
 
@@ -204,21 +173,24 @@ namespace System.Collections.Tests
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void ICollection_NonGeneric_CopyTo_TwoDimensionArray_ThrowsArgumentException(int count)
+        public void ICollection_NonGeneric_CopyTo_TwoDimensionArray_ThrowsException(int count)
         {
             if (count > 0)
             {
                 ICollection collection = NonGenericICollectionFactory(count);
-                Array arr = new object[count,count];
+                Array arr = new object[count, count];
                 Assert.Equal(2, arr.Rank);
-                Assert.Throws<ArgumentException>(() => collection.CopyTo(arr, 0));
+                Assert.Throws(ICollection_NonGeneric_CopyTo_TwoDimensionArray_ThrowType, () => collection.CopyTo(arr, 0));
             }
         }
 
-        [Theory]
+        [ConditionalTheory(typeof(PlatformDetection), nameof(PlatformDetection.IsNonZeroLowerBoundArraySupported))]
         [MemberData(nameof(ValidCollectionSizes))]
         public virtual void ICollection_NonGeneric_CopyTo_NonZeroLowerBound(int count)
         {
+            if (!PlatformDetection.IsNonZeroLowerBoundArraySupported)
+                return;
+
             ICollection collection = NonGenericICollectionFactory(count);
             Array arr = Array.CreateInstance(typeof(object), new int[1] { count }, new int[1] { 2 });
             Assert.Equal(1, arr.Rank);
@@ -275,7 +247,7 @@ namespace System.Collections.Tests
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void ICollection_NonGeneric_CopyTo_IndexEqualToArrayCount_ThrowsArgumentException(int count)
+        public virtual void ICollection_NonGeneric_CopyTo_IndexEqualToArrayCount_ThrowsArgumentException(int count)
         {
             ICollection collection = NonGenericICollectionFactory(count);
             object[] array = new object[count];
@@ -287,16 +259,17 @@ namespace System.Collections.Tests
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void ICollection_NonGeneric_CopyTo_IndexLargerThanArrayCount_ThrowsAnyArgumentException(int count)
+        public virtual void ICollection_NonGeneric_CopyTo_IndexLargerThanArrayCount_ThrowsAnyArgumentException(int count)
         {
             ICollection collection = NonGenericICollectionFactory(count);
+
             object[] array = new object[count];
-            Assert.ThrowsAny<ArgumentException>(() => collection.CopyTo(array, count + 1)); // some implementations throw ArgumentOutOfRangeException for this scenario
+            Assert.Throws(ICollection_NonGeneric_CopyTo_IndexLargerThanArrayCount_ThrowType, () => collection.CopyTo(array, count + 1));
         }
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
-        public void ICollection_NonGeneric_CopyTo_NotEnoughSpaceInOffsettedArray_ThrowsArgumentException(int count)
+        public virtual void ICollection_NonGeneric_CopyTo_NotEnoughSpaceInOffsettedArray_ThrowsArgumentException(int count)
         {
             if (count > 0) // Want the T array to have at least 1 element
             {

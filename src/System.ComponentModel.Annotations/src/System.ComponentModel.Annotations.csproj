@@ -1,22 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <ProjectGuid>{4266D58F-EB60-46C2-BA81-3ABDE759A7D5}</ProjectGuid>
     <RootNamespace>System.ComponentModel.Annotations</RootNamespace>
     <AssemblyName>System.ComponentModel.Annotations</AssemblyName>
-    <AssemblyVersion>4.1.0.0</AssemblyVersion>
-    <PackageTargetFramework Condition="'$(PackageTargetFramework)'==''">netstandard1.4</PackageTargetFramework>
-    <IsPartialFacadeAssembly Condition="'$(TargetGroup)'=='net461'">true</IsPartialFacadeAssembly>
-    <NuGetTargetMoniker Condition="'$(TargetGroup)' == ''">.NETStandard,Version=v1.4</NuGetTargetMoniker>
+    <IsPartialFacadeAssembly Condition="'$(TargetsNetFx)'=='true'">true</IsPartialFacadeAssembly>
+    <Configurations>net461-Debug;net461-Release;netfx-Debug;netfx-Release;netstandard-Debug;netstandard-Release</Configurations>
   </PropertyGroup>
   <!-- Default configurations to help VS understand the options -->
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'net461_Debug|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'net461_Release|AnyCPU'" />
-  
-  <ItemGroup Condition="'$(TargetGroup)'==''">
+  <ItemGroup Condition="'$(TargetGroup)'=='netstandard'">
+    <Compile Include="System\ComponentModel\DataAnnotations\AssociatedMetadataTypeTypeDescriptor.cs" />
+    <Compile Include="System\ComponentModel\DataAnnotations\AssociatedMetadataTypeTypeDescriptionProvider.cs" />
     <Compile Include="System\ComponentModel\DataAnnotations\AssociationAttribute.cs" />
     <Compile Include="System\ComponentModel\DataAnnotations\CompareAttribute.cs" />
     <Compile Include="System\ComponentModel\DataAnnotations\ConcurrencyCheckAttribute.cs" />
@@ -36,6 +29,8 @@
     <Compile Include="System\ComponentModel\DataAnnotations\KeyAttribute.cs" />
     <Compile Include="System\ComponentModel\DataAnnotations\LocalizableString.cs" />
     <Compile Include="System\ComponentModel\DataAnnotations\MaxLengthAttribute.cs" />
+    <Compile Include="System\ComponentModel\DataAnnotations\MetadataPropertyDescriptorWrapper.cs" />
+    <Compile Include="System\ComponentModel\DataAnnotations\MetadataTypeAttribute.cs" />
     <Compile Include="System\ComponentModel\DataAnnotations\MinLengthAttribute.cs" />
     <Compile Include="System\ComponentModel\DataAnnotations\PhoneAttribute.cs" />
     <Compile Include="System\ComponentModel\DataAnnotations\RangeAttribute.cs" />
@@ -64,12 +59,11 @@
       <Link>Common\System\NotImplemented.cs</Link>
     </Compile>
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetGroup)'=='net461'">
-    <TargetingPackReference Include="mscorlib" />
-    <TargetingPackReference Include="System.ComponentModel.DataAnnotations" />
+  <ItemGroup Condition="'$(TargetsNetFx)'=='true'">
+    <Reference Include="mscorlib" />
+    <Reference Include="System.ComponentModel.DataAnnotations" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="project.json" />
+    <EmbeddedResource Include="Resources\$(AssemblyName).rd.xml" />
   </ItemGroup>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.targets))\dir.targets" />
 </Project>

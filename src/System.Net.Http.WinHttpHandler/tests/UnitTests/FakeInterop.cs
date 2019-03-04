@@ -36,9 +36,9 @@ internal static partial class Interop
         }
     }
 
-    internal static partial class mincore
+    internal static partial class Kernel32
     {
-        public static string GetMessage(IntPtr moduleName, int error)
+        public static string GetMessage(int error, IntPtr moduleName)
         {
             string messageFormat = "Fake error message, error code: {0}";
             return string.Format(messageFormat, error);
@@ -201,7 +201,7 @@ internal static partial class Interop
                 }
                 else
                 {
-                    int bufferSize = Marshal.SizeOf<int>();
+                    int bufferSize = sizeof(int);
                     IntPtr buffer = Marshal.AllocHGlobal(bufferSize);
                     Marshal.WriteInt32(buffer, TestServer.DataAvailable);
                     fakeHandle.InvokeCallback(Interop.WinHttp.WINHTTP_CALLBACK_STATUS_DATA_AVAILABLE, buffer, (uint)bufferSize);
@@ -383,6 +383,15 @@ internal static partial class Interop
             SafeWinHttpHandle handle,
             uint option,
             IntPtr buffer,
+            ref uint bufferSize)
+        {
+            return true;
+        }
+
+        public static bool WinHttpQueryOption(
+            SafeWinHttpHandle handle,
+            uint option,
+            ref uint buffer,
             ref uint bufferSize)
         {
             return true;

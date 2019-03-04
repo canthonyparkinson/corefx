@@ -38,8 +38,6 @@ namespace System.Reflection.Metadata
 
         public BlobWriter(byte[] buffer, int start, int count)
         {
-            // the writer assumes little-endian architecture:
-            Debug.Assert(BitConverter.IsLittleEndian);
             Debug.Assert(buffer != null);
             Debug.Assert(count >= 0);
             Debug.Assert(count <= buffer.Length - start);
@@ -231,7 +229,7 @@ namespace System.Reflection.Metadata
                 return;
             }
 
-            fixed (byte* ptr = buffer)
+            fixed (byte* ptr = &buffer[0])
             {
                 WriteBytes(ptr + start, byteCount);
             }
@@ -384,7 +382,7 @@ namespace System.Reflection.Metadata
                 return;
             }
 
-            fixed (char* ptr = value)
+            fixed (char* ptr = &value[0])
             {
                 WriteBytesUnchecked((byte*)ptr, value.Length * sizeof(char));
             }
@@ -511,10 +509,10 @@ namespace System.Reflection.Metadata
         /// 
         /// Otherwise, encode as a 4-byte integer, with bit 31 set, bit 30 set, bit 29 clear (value held in bits 28 through 0).
         /// </remarks>
-        /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> can't be represented as a compressed signed integer.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> can't be represented as a compressed unsigned integer.</exception>
         public void WriteCompressedInteger(int value)
         {
-            BlobWriterImpl.WriteCompressedInteger(ref this, value);
+            BlobWriterImpl.WriteCompressedInteger(ref this, unchecked((uint)value));
         }
 
         /// <summary>

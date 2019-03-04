@@ -4,6 +4,8 @@
 
 using System.Collections;
 using System.Globalization;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
@@ -19,24 +21,9 @@ namespace System.Data.SqlClient.ManualTesting.Tests
         private const string warningInfoMessage = "Test of info messages";
         private const string orderIdQuery = "select orderid from orders where orderid < 10250";
 
-#if MANAGED_SNI
-        [Fact]
-        public static void NonWindowsIntAuthFailureTest()
-        {
-            string connectionString = DataTestClass.SQL2008_Northwind + ";Integrated Security = true";
-            Assert.Throws<NotSupportedException>(() => new SqlConnection(connectionString).Open());
-
-            // Should not receive any exception when using IntAuth=false
-            connectionString = DataTestClass.SQL2008_Northwind + ";Integrated Security = false";
-            new SqlConnection(connectionString).Open();
-        }
-#endif
-
-        [Fact]
+        [ConditionalFact(typeof(DataTestUtility),nameof(DataTestUtility.AreConnStringsSetup))]
         public static void WarningTest()
         {
-            string connectionString = DataTestClass.SQL2008_Northwind;
-
             Action<object, SqlInfoMessageEventArgs> warningCallback =
                 (object sender, SqlInfoMessageEventArgs imevent) =>
                 {
@@ -47,7 +34,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                 };
 
             SqlInfoMessageEventHandler handler = new SqlInfoMessageEventHandler(warningCallback);
-            using (SqlConnection sqlConnection = new SqlConnection(connectionString + ";pooling=false;"))
+            using (SqlConnection sqlConnection = new SqlConnection((new SqlConnectionStringBuilder(DataTestUtility.TcpConnStr) { Pooling = false }).ConnectionString))
             {
                 sqlConnection.InfoMessage += handler;
                 sqlConnection.Open();
@@ -60,10 +47,24 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             }
         }
 
-        [Fact]
+        private static bool EmployeesTableHasFullTextIndex()
+        {
+            if (DataTestUtility.TcpConnStr == null)
+                return false;
+
+            using (SqlConnection conn = new SqlConnection(DataTestUtility.TcpConnStr))
+            using (SqlCommand cmd = conn.CreateCommand())
+            {
+                conn.Open();
+                cmd.CommandText = "SELECT object_id FROM sys.fulltext_indexes WHERE object_id = object_id('Northwind.dbo.Employees')";
+
+                return (cmd.ExecuteScalar() != null);
+            }
+        }
+
+        [ConditionalFact(nameof(EmployeesTableHasFullTextIndex))]
         public static void WarningsBeforeRowsTest()
         {
-            string connectionString = DataTestClass.SQL2008_Northwind;
             bool hitWarnings = false;
 
             int iteration = 0;
@@ -78,7 +79,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                 };
 
             SqlInfoMessageEventHandler handler = new SqlInfoMessageEventHandler(warningCallback);
-            SqlConnection sqlConnection = new SqlConnection(connectionString);
+            SqlConnection sqlConnection = new SqlConnection(DataTestUtility.TcpConnStr);
             sqlConnection.InfoMessage += handler;
             sqlConnection.Open();
             foreach (string orderClause in new string[] { "", " order by FirstName" })
@@ -146,11 +147,10 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             return true;
         }
 
-        [Fact]
+        [ConditionalFact(typeof(DataTestUtility),nameof(DataTestUtility.AreConnStringsSetup))]
         public static void ExceptionTests()
         {
-            string connectionString = DataTestClass.SQL2008_Northwind;
-            SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder(connectionString);
+            SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder(DataTestUtility.TcpConnStr);
 
             // tests improper server name thrown from constructor of tdsparser
             SqlConnectionStringBuilder badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { DataSource = badServer, ConnectTimeout = 1 };
@@ -158,12 +158,14 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             VerifyConnectionFailure<SqlException>(() => GenerateConnectionException(badBuilder.ConnectionString), sqlsvrBadConn, VerifyException);
 
             // tests incorrect password - thrown from the adapter
-            badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { Password = string.Empty };
+            badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { Password = string.Empty, IntegratedSecurity = false };
             string errorMessage = string.Format(CultureInfo.InvariantCulture, logonFailedErrorMessage, badBuilder.UserID);
             VerifyConnectionFailure<SqlException>(() => GenerateConnectionException(badBuilder.ConnectionString), errorMessage, (ex) => VerifyException(ex, 1, 18456, 1, 14));
 
             // tests incorrect database name - exception thrown from adapter
-            badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { InitialCatalog = "NotADatabase" };
+            // (Forcing Pooling here, so that differing ClientConnectionId's in the exceptions won't make the test fail
+            // in CheckThatExceptionsAreDistinctButHaveSameData)
+            badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { InitialCatalog = "NotADatabase", Pooling = true };
             errorMessage = string.Format(CultureInfo.InvariantCulture, "Cannot open database \"{0}\" requested by the login. The login failed.", badBuilder.InitialCatalog);
             SqlException firstAttemptException = VerifyConnectionFailure<SqlException>(() => GenerateConnectionException(badBuilder.ConnectionString), errorMessage, (ex) => VerifyException(ex, 2, 4060, 1, 11));
 
@@ -171,17 +173,15 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             VerifyConnectionFailure<SqlException>(() => GenerateConnectionException(badBuilder.ConnectionString), errorMessage, (ex) => CheckThatExceptionsAreDistinctButHaveSameData(firstAttemptException, ex));
 
             // tests incorrect user name - exception thrown from adapter
-            badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { UserID = "NotAUser" };
+            badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { UserID = "NotAUser", IntegratedSecurity = false };
             errorMessage = string.Format(CultureInfo.InvariantCulture, logonFailedErrorMessage, badBuilder.UserID);
             VerifyConnectionFailure<SqlException>(() => GenerateConnectionException(badBuilder.ConnectionString), errorMessage, (ex) => VerifyException(ex, 1, 18456, 1, 14));
         }
 
-        [Fact]
+        [ConditionalFact(typeof(DataTestUtility),nameof(DataTestUtility.AreConnStringsSetup))]
         public static void VariousExceptionTests()
         {
-            string connectionString = DataTestClass.SQL2008_Northwind;
-
-            SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder(connectionString);
+            SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder(DataTestUtility.TcpConnStr);
 
 
             // Test 1 - A
@@ -196,7 +196,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             }
 
             // Test 1 - B
-            badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { Password = string.Empty };
+            badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { Password = string.Empty, IntegratedSecurity = false };
             using (var sqlConnection = new SqlConnection(badBuilder.ConnectionString))
             {
                 string errorMessage = string.Format(CultureInfo.InvariantCulture, logonFailedErrorMessage, badBuilder.UserID);
@@ -204,12 +204,10 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             }
         }
 
-        [Fact]
+        [ConditionalFact(typeof(DataTestUtility),nameof(DataTestUtility.AreConnStringsSetup))]
         public static void IndependentConnectionExceptionTest()
         {
-            string connectionString = DataTestClass.SQL2008_Northwind;
-
-            SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder(connectionString);
+            SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder(DataTestUtility.TcpConnStr);
 
             SqlConnectionStringBuilder badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { DataSource = badServer, ConnectTimeout = 1 };
             using (var sqlConnection = new SqlConnection(badBuilder.ConnectionString))
@@ -223,6 +221,48 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                     VerifyConnectionFailure<InvalidOperationException>(() => command.ExecuteReader(), execReaderFailedMessage);
                 }
             }
+        }
+
+        [ConditionalFact(typeof(DataTestUtility),nameof(DataTestUtility.AreConnStringsSetup))]
+        public static async Task UnobservedTaskExceptionTest()
+        {
+            List<Exception> exceptionsSeen = new List<Exception>();
+            Action<object, UnobservedTaskExceptionEventArgs> unobservedTaskCallback =
+                (object sender, UnobservedTaskExceptionEventArgs e) =>
+                {
+                    Assert.False(exceptionsSeen.Contains(e.Exception.InnerException), "FAILED: This exception was already observed by awaiting: " + e.Exception.InnerException);
+                };
+            EventHandler<UnobservedTaskExceptionEventArgs> handler = new EventHandler<UnobservedTaskExceptionEventArgs>(unobservedTaskCallback);
+
+            TaskScheduler.UnobservedTaskException += handler;
+
+            using(var connection = new SqlConnection(DataTestUtility.TcpConnStr))
+            {
+                await connection.OpenAsync();
+                using (var command = new SqlCommand("select null; select * from dbo.NonexistentTable;", connection))
+                {
+                    try
+                    {
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            do
+                            {
+                                while (await reader.ReadAsync())
+                                {
+                                }
+                            } while (await reader.NextResultAsync());
+                        }
+                    }
+                    catch (SqlException ex)
+                    {
+                        exceptionsSeen.Add(ex);
+                    }
+                }
+            }
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
+            TaskScheduler.UnobservedTaskException -= handler;
         }
 
         private static void GenerateConnectionException(string connectionString)

@@ -6,6 +6,8 @@ using System.IO;
 using System.Security.Authentication;
 using System.Security.Authentication.ExtendedProtection;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace System.Net.Security
 {
@@ -15,14 +17,24 @@ namespace System.Net.Security
         //  The public Client and Server classes enforce the parameters rules before
         //  calling into this .ctor.
         //
-        internal SslState(Stream innerStream, RemoteCertValidationCallback certValidationCallback, LocalCertSelectionCallback certSelectionCallback, EncryptionPolicy encryptionPolicy)
+        internal SslState(Stream innerStream)
         {
         }
-        //
-        //
-        //
-        internal void ValidateCreateContext(bool isServer, string targetHost, SslProtocols enabledSslProtocols, X509Certificate serverCertificate, X509CertificateCollection clientCertificates, bool remoteCertRequired, bool checkCertRevocationStatus)
+
+        internal void ValidateCreateContext(SslClientAuthenticationOptions sslClientAuthenticationOptions, RemoteCertValidationCallback remoteCallback, LocalCertSelectionCallback localCallback)
         {
+        }
+
+        internal void ValidateCreateContext(SslAuthenticationOptions sslAuthenticationOptions)
+        {
+        }
+
+        internal SslApplicationProtocol NegotiatedApplicationProtocol
+        {
+            get
+            {
+                return default;
+            }
         }
 
         internal bool IsAuthenticated
@@ -145,12 +157,19 @@ namespace System.Net.Security
             }
         }
 
+        public bool IsShutdown { get; internal set; }
+
         internal void CheckThrow(bool authSucessCheck)
         {
         }
 
         internal void Flush()
         {
+        }
+
+        internal Task FlushAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
         }
 
         //
@@ -170,6 +189,16 @@ namespace System.Net.Security
 
         internal void EndProcessAuthentication(IAsyncResult result)
         {
+        }
+
+        internal IAsyncResult BeginShutdown(AsyncCallback asyncCallback, object asyncState)
+        {
+            throw new NotImplementedException();
+        }
+
+        internal void EndShutdown(IAsyncResult asyncResult)
+        {
+            throw new NotImplementedException();
         }
     }
 
@@ -225,6 +254,11 @@ namespace System.Net.Security
             throw new NotImplementedException();
         }
 
+        public override Task FlushAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromException(new NotImplementedException());
+        }
+
         public override int Read(byte[] buffer, int offset, int count)
         {
             throw new NotImplementedException();
@@ -244,23 +278,38 @@ namespace System.Net.Security
         {
             throw new NotImplementedException();
         }
-
-        internal IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback asyncCallback, object asyncState)
+                
+        public new ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        internal int EndRead(IAsyncResult asyncResult)
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        internal IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback asyncCallback, object asyncState)
+        public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback asyncCallback, object asyncState)
         {
             throw new NotImplementedException();
         }
 
-        internal void EndWrite(IAsyncResult asyncResult)
+        public override int EndRead(IAsyncResult asyncResult)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback asyncCallback, object asyncState)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override void EndWrite(IAsyncResult asyncResult)
         {
             throw new NotImplementedException();
         }

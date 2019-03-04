@@ -3,8 +3,9 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Text;
 
 namespace System.Net.Http.Headers
@@ -164,7 +165,7 @@ namespace System.Net.Http.Headers
 
         private CacheControlHeaderValue(CacheControlHeaderValue source)
         {
-            Contract.Requires(source != null);
+            Debug.Assert(source != null);
 
             _noCache = source._noCache;
             _noStore = source._noStore;
@@ -207,7 +208,7 @@ namespace System.Net.Http.Headers
 
         public override string ToString()
         {
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = StringBuilderCache.Acquire();
 
             AppendValueIfRequired(sb, _noStore, noStoreString);
             AppendValueIfRequired(sb, _noTransform, noTransformString);
@@ -231,14 +232,34 @@ namespace System.Net.Http.Headers
             {
                 AppendValueWithSeparatorIfRequired(sb, maxAgeString);
                 sb.Append('=');
-                sb.Append(((int)_maxAge.Value.TotalSeconds).ToString(NumberFormatInfo.InvariantInfo));
+                int maxAge = (int)_maxAge.GetValueOrDefault().TotalSeconds;
+                if (maxAge >= 0)
+                {
+                    sb.Append(maxAge);
+                }
+                else
+                {
+                    // In the corner case where the value is negative, ensure it uses
+                    // the invariant's negative sign rather than the current culture's.
+                    sb.Append(maxAge.ToString(NumberFormatInfo.InvariantInfo));
+                }
             }
 
             if (_sharedMaxAge.HasValue)
             {
                 AppendValueWithSeparatorIfRequired(sb, sharedMaxAgeString);
                 sb.Append('=');
-                sb.Append(((int)_sharedMaxAge.Value.TotalSeconds).ToString(NumberFormatInfo.InvariantInfo));
+                int sharedMaxAge = (int)_sharedMaxAge.GetValueOrDefault().TotalSeconds;
+                if (sharedMaxAge >= 0)
+                {
+                    sb.Append(sharedMaxAge);
+                }
+                else
+                {
+                    // In the corner case where the value is negative, ensure it uses
+                    // the invariant's negative sign rather than the current culture's.
+                    sb.Append(sharedMaxAge.ToString(NumberFormatInfo.InvariantInfo));
+                }
             }
 
             if (_maxStale)
@@ -247,7 +268,17 @@ namespace System.Net.Http.Headers
                 if (_maxStaleLimit.HasValue)
                 {
                     sb.Append('=');
-                    sb.Append(((int)_maxStaleLimit.Value.TotalSeconds).ToString(NumberFormatInfo.InvariantInfo));
+                    int maxStaleLimit = (int)_maxStaleLimit.GetValueOrDefault().TotalSeconds;
+                    if (maxStaleLimit >= 0)
+                    {
+                        sb.Append(maxStaleLimit);
+                    }
+                    else
+                    {
+                        // In the corner case where the value is negative, ensure it uses
+                        // the invariant's negative sign rather than the current culture's.
+                        sb.Append(maxStaleLimit.ToString(NumberFormatInfo.InvariantInfo));
+                    }
                 }
             }
 
@@ -255,7 +286,17 @@ namespace System.Net.Http.Headers
             {
                 AppendValueWithSeparatorIfRequired(sb, minFreshString);
                 sb.Append('=');
-                sb.Append(((int)_minFresh.Value.TotalSeconds).ToString(NumberFormatInfo.InvariantInfo));
+                int minFresh = (int)_minFresh.GetValueOrDefault().TotalSeconds;
+                if (minFresh >= 0)
+                {
+                    sb.Append(minFresh);
+                }
+                else
+                {
+                    // In the corner case where the value is negative, ensure it uses
+                    // the invariant's negative sign rather than the current culture's.
+                    sb.Append(minFresh.ToString(NumberFormatInfo.InvariantInfo));
+                }
             }
 
             if (_privateField)
@@ -271,7 +312,7 @@ namespace System.Net.Http.Headers
 
             NameValueHeaderValue.ToString(_extensions, ',', false, sb);
 
-            return sb.ToString();
+            return StringBuilderCache.GetStringAndRelease(sb);
         }
 
         public override bool Equals(object obj)
@@ -380,7 +421,7 @@ namespace System.Net.Http.Headers
         internal static int GetCacheControlLength(string input, int startIndex, CacheControlHeaderValue storeValue,
             out CacheControlHeaderValue parsedValue)
         {
-            Contract.Requires(startIndex >= 0);
+            Debug.Assert(startIndex >= 0);
 
             parsedValue = null;
 
@@ -523,7 +564,7 @@ namespace System.Net.Http.Headers
         private static bool TrySetOptionalTokenList(NameValueHeaderValue nameValue, ref bool boolField,
             ref ObjectCollection<string> destination)
         {
-            Contract.Requires(nameValue != null);
+            Debug.Assert(nameValue != null);
 
             if (nameValue.Value == null)
             {
@@ -585,7 +626,7 @@ namespace System.Net.Http.Headers
 
         private static bool TrySetTimeSpan(NameValueHeaderValue nameValue, ref TimeSpan? timeSpan)
         {
-            Contract.Requires(nameValue != null);
+            Debug.Assert(nameValue != null);
 
             if (nameValue.Value == null)
             {
@@ -640,7 +681,7 @@ namespace System.Net.Http.Headers
 
         private static void CheckIsValidToken(string item)
         {
-            HeaderUtilities.CheckValidToken(item, "item");
+            HeaderUtilities.CheckValidToken(item, nameof(item));
         }
 
         object ICloneable.Clone()

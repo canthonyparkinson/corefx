@@ -146,7 +146,7 @@ namespace System.IO.Packaging
         /// <exception cref="IOException">If package to be created should have readwrite/write access and underlying stream is read only</exception>
         public static Package Open(Stream stream)
         {
-            return Open(stream, s_defaultStreamMode);
+            return Open(stream, s_defaultStreamMode, s_defaultStreamAccess);
         }
 
         /// <summary>
@@ -563,7 +563,7 @@ namespace System.IO.Packaging
         /// <exception cref="ArgumentException">If relationship is being targeted to a relationship part</exception>
         /// <exception cref="System.Xml.XmlException">If parameter "id" is not a valid Xsd Id</exception>
         /// <exception cref="System.Xml.XmlException">If an id is provided in the method, and its not unique</exception>
-        public PackageRelationship CreateRelationship(Uri targetUri, TargetMode targetMode, string relationshipType, String id)
+        public PackageRelationship CreateRelationship(Uri targetUri, TargetMode targetMode, string relationshipType, string id)
         {
             ThrowIfObjectDisposed();
             ThrowIfReadOnly();
@@ -582,7 +582,7 @@ namespace System.IO.Packaging
         /// <exception cref="IOException">If the package is readonly, it cannot be modified</exception>
         /// <exception cref="ArgumentNullException">If parameter "id" is null</exception>
         /// <exception cref="System.Xml.XmlException">If parameter "id" is not a valid Xsd Id</exception>
-        public void DeleteRelationship(String id)
+        public void DeleteRelationship(string id)
         {
             ThrowIfObjectDisposed();
             ThrowIfReadOnly();
@@ -1171,11 +1171,12 @@ namespace System.IO.Packaging
         #region Private Members
 
         // Default values for the Package.Open method overloads
-        private static readonly FileMode s_defaultFileMode = FileMode.OpenOrCreate;
-        private static readonly FileAccess s_defaultFileAccess = FileAccess.ReadWrite;
-        private static readonly FileShare s_defaultFileShare = FileShare.None;
+        private const FileMode s_defaultFileMode = FileMode.OpenOrCreate;
+        private const FileAccess s_defaultFileAccess = FileAccess.ReadWrite;
+        private const FileShare s_defaultFileShare = FileShare.None;
 
-        private static readonly FileMode s_defaultStreamMode = FileMode.Open;
+        private const FileMode s_defaultStreamMode = FileMode.Open;
+        private const FileAccess s_defaultStreamAccess = FileAccess.Read;
 
         private FileAccess _openFileAccess;
         private FileMode _openFileMode;

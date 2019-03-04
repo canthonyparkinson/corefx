@@ -2,12 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
-using System.Net;
+using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 
@@ -16,19 +14,20 @@ namespace System.Net.WebSockets
     public sealed class ClientWebSocketOptions
     {
         private bool _isReadOnly; // After ConnectAsync is called the options cannot be modified.
-        private readonly List<string> _requestedSubProtocols;
-        private readonly WebHeaderCollection _requestHeaders;
-        private TimeSpan _keepAliveInterval;
+        private TimeSpan _keepAliveInterval = WebSocket.DefaultKeepAliveInterval;
+        private bool _useDefaultCredentials;
         private ICredentials _credentials;
         private IWebProxy _proxy;
-        private X509CertificateCollection _clientCertificates;
         private CookieContainer _cookies;
+        private int _receiveBufferSize = 0x1000;
+        private ArraySegment<byte>? _buffer;
+        private RemoteCertificateValidationCallback _remoteCertificateValidationCallback;
 
-        internal ClientWebSocketOptions()
-        {
-            _requestedSubProtocols = new List<string>();
-            _requestHeaders = new WebHeaderCollection();
-        }
+        internal X509CertificateCollection _clientCertificates;
+        internal WebHeaderCollection _requestHeaders;
+        internal List<string> _requestedSubProtocols;
+
+        internal ClientWebSocketOptions() { } // prevent external instantiation
 
         #region HTTP Settings
 
@@ -38,12 +37,27 @@ namespace System.Net.WebSockets
             ThrowIfReadOnly();
 
             // WebHeaderCollection performs validation of headerName/headerValue.
-            _requestHeaders[headerName] = headerValue;
+            RequestHeaders.Set(headerName, headerValue);
         }
 
-        internal WebHeaderCollection RequestHeaders { get { return _requestHeaders; } }
+        internal WebHeaderCollection RequestHeaders =>
+            _requestHeaders ?? (_requestHeaders = new WebHeaderCollection());
 
-        internal List<string> RequestedSubProtocols {  get { return _requestedSubProtocols;} }
+        internal List<string> RequestedSubProtocols =>
+            _requestedSubProtocols ?? (_requestedSubProtocols = new List<string>());
+
+        public bool UseDefaultCredentials
+        {
+            get
+            {
+                return _useDefaultCredentials;
+            }
+            set
+            {
+                ThrowIfReadOnly();
+                _useDefaultCredentials = value;
+            }
+        }
 
         public ICredentials Credentials
         {
@@ -94,6 +108,16 @@ namespace System.Net.WebSockets
             }
         }
 
+        public RemoteCertificateValidationCallback RemoteCertificateValidationCallback
+        {
+            get => _remoteCertificateValidationCallback;
+            set
+            {
+                ThrowIfReadOnly();
+                _remoteCertificateValidationCallback = value;
+            }
+        }
+
         public CookieContainer Cookies
         {
             get
@@ -117,15 +141,15 @@ namespace System.Net.WebSockets
             WebSocketValidate.ValidateSubprotocol(subProtocol);
 
             // Duplicates not allowed.
-            foreach (string item in _requestedSubProtocols)
+            List<string> subprotocols = RequestedSubProtocols; // force initialization of the list
+            foreach (string item in subprotocols)
             {
                 if (string.Equals(item, subProtocol, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new ArgumentException(SR.Format(SR.net_WebSockets_NoDuplicateProtocol, subProtocol),
-nameof(subProtocol));
+                    throw new ArgumentException(SR.Format(SR.net_WebSockets_NoDuplicateProtocol, subProtocol), nameof(subProtocol));
                 }
             }
-            _requestedSubProtocols.Add(subProtocol);
+            subprotocols.Add(subProtocol);
         }
 
         public TimeSpan KeepAliveInterval
@@ -145,6 +169,49 @@ nameof(subProtocol));
                 }
                 _keepAliveInterval = value;
             }
+        }
+
+        internal int ReceiveBufferSize => _receiveBufferSize;
+        internal ArraySegment<byte>? Buffer => _buffer;
+
+        public void SetBuffer(int receiveBufferSize, int sendBufferSize)
+        {
+            ThrowIfReadOnly();
+
+            if (receiveBufferSize <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(receiveBufferSize), receiveBufferSize, SR.Format(SR.net_WebSockets_ArgumentOutOfRange_TooSmall, 1));
+            }
+            if (sendBufferSize <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(sendBufferSize), sendBufferSize, SR.Format(SR.net_WebSockets_ArgumentOutOfRange_TooSmall, 1));
+            }
+
+            _receiveBufferSize = receiveBufferSize;
+            _buffer = null;
+        }
+
+        public void SetBuffer(int receiveBufferSize, int sendBufferSize, ArraySegment<byte> buffer)
+        {
+            ThrowIfReadOnly();
+
+            if (receiveBufferSize <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(receiveBufferSize), receiveBufferSize, SR.Format(SR.net_WebSockets_ArgumentOutOfRange_TooSmall, 1));
+            }
+            if (sendBufferSize <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(sendBufferSize), sendBufferSize, SR.Format(SR.net_WebSockets_ArgumentOutOfRange_TooSmall, 1));
+            }
+
+            WebSocketValidate.ValidateArraySegment(buffer, nameof(buffer));
+            if (buffer.Count == 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(buffer));
+            }
+
+            _receiveBufferSize = receiveBufferSize;
+            _buffer = buffer;
         }
 
         #endregion WebSocket settings

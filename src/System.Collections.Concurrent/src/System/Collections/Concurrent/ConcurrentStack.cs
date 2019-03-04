@@ -58,7 +58,6 @@ namespace System.Collections.Concurrent
         }
 
         private volatile Node _head; // The stack is a singly linked list, and only remembers the head.
-
         private const int BACKOFF_MAX_YIELDS = 8; // Arbitrary number to cap backoff.
 
         /// <summary>
@@ -274,7 +273,6 @@ namespace System.Collections.Concurrent
             ToList().CopyTo(array, index);
         }
 
-#pragma warning disable 0420 // No warning for Interlocked.xxx if compiled with new managed compiler (Roslyn)
         /// <summary>
         /// Inserts an object at the top of the <see cref="ConcurrentStack{T}"/>.
         /// </summary>
@@ -385,19 +383,17 @@ namespace System.Collections.Concurrent
             // Keep trying to CAS the existing head with the new node until we succeed.
             do
             {
-                spin.SpinOnce();
+                spin.SpinOnce(sleep1Threshold: -1);
                 // Reread the head and link our new node.
                 tail._next = _head;
             }
             while (Interlocked.CompareExchange(
                 ref _head, head, tail._next) != tail._next);
 
-#if FEATURE_TRACING
             if (CDSCollectionETWBCLProvider.Log.IsEnabled())
             {
                 CDSCollectionETWBCLProvider.Log.ConcurrentStack_FastPushFailed(spin.Count);
             }
-#endif
         }
 
         /// <summary>
@@ -610,19 +606,18 @@ namespace System.Collections.Concurrent
             Node head;
             Node next;
             int backoff = 1;
-            Random r = new Random(Environment.TickCount & Int32.MaxValue); // avoid the case where TickCount could return Int32.MinValue
+            Random r = null;
             while (true)
             {
                 head = _head;
                 // Is the stack empty?
                 if (head == null)
                 {
-#if FEATURE_TRACING
                     if (count == 1 && CDSCollectionETWBCLProvider.Log.IsEnabled())
                     {
                         CDSCollectionETWBCLProvider.Log.ConcurrentStack_FastPopFailed(spin.Count);
                     }
-#endif
+
                     poppedHead = null;
                     return 0;
                 }
@@ -636,12 +631,11 @@ namespace System.Collections.Concurrent
                 // Try to swap the new head.  If we succeed, break out of the loop.
                 if (Interlocked.CompareExchange(ref _head, next._next, head) == head)
                 {
-#if FEATURE_TRACING
                     if (count == 1 && CDSCollectionETWBCLProvider.Log.IsEnabled())
                     {
                         CDSCollectionETWBCLProvider.Log.ConcurrentStack_FastPopFailed(spin.Count);
                     }
-#endif
+
                     // Return the popped Node.
                     poppedHead = head;
                     return nodesCount;
@@ -650,13 +644,23 @@ namespace System.Collections.Concurrent
                 // We failed to CAS the new head.  Spin briefly and retry.
                 for (int i = 0; i < backoff; i++)
                 {
-                    spin.SpinOnce();
+                    spin.SpinOnce(sleep1Threshold: -1);
                 }
 
-                backoff = spin.NextSpinWillYield ? r.Next(1, BACKOFF_MAX_YIELDS) : backoff * 2;
+                if (spin.NextSpinWillYield)
+                {
+                    if (r == null)
+                    {
+                        r = new Random();
+                    }
+                    backoff = r.Next(1, BACKOFF_MAX_YIELDS);
+                }
+                else
+                {
+                    backoff *= 2;
+                }
             }
         }
-#pragma warning restore 0420
 
         /// <summary>
         /// Local helper function to copy the popped elements into a given collection
@@ -739,7 +743,7 @@ namespace System.Collections.Concurrent
         /// <remarks>
         /// The enumeration represents a moment-in-time snapshot of the contents
         /// of the stack.  It does not reflect any updates to the collection after 
-        /// <see cref="GetEnumerator"/> was called.  The enumerator is safe to use
+        /// <see cref="GetEnumerator()"/> was called.  The enumerator is safe to use
         /// concurrently with reads from and writes to the stack.
         /// </remarks>
         public IEnumerator<T> GetEnumerator()
@@ -773,7 +777,7 @@ namespace System.Collections.Concurrent
         /// <remarks>
         /// The enumeration represents a moment-in-time snapshot of the contents of the stack. It does not
         /// reflect any updates to the collection after
-        /// <see cref="GetEnumerator"/> was called. The enumerator is safe to use concurrently with reads
+        /// <see cref="GetEnumerator()"/> was called. The enumerator is safe to use concurrently with reads
         /// from and writes to the stack.
         /// </remarks>
         IEnumerator IEnumerable.GetEnumerator()

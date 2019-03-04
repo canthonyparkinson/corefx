@@ -22,7 +22,7 @@ namespace System.Reflection.Tests
                 Assert.Equal(ConstructorInfo.ConstructorName, constructorInfo.Name);
             }
         }
-        
+
         public static IEnumerable<object[]> Equals_TestData()
         {
             ConstructorInfo[] methodSampleConstructors1 = GetConstructors(typeof(ClassWith3Constructors));
@@ -38,6 +38,7 @@ namespace System.Reflection.Tests
         public void Equals(ConstructorInfo constructorInfo1, ConstructorInfo constructorInfo2, bool expected)
         {
             Assert.Equal(expected, constructorInfo1.Equals(constructorInfo2));
+            Assert.NotEqual(expected, constructorInfo1 != constructorInfo2);
         }
 
         [Fact]
@@ -60,9 +61,11 @@ namespace System.Reflection.Tests
         }
 
         [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.UapAot, "Invoking static constructors are not supported on UapAot.")]
         public void Invoke_StaticConstructor_NullObject_NullParameters()
         {
             ConstructorInfo[] constructors = GetConstructors(typeof(ClassWithStaticConstructor));
+            Assert.Equal(1, constructors.Length);
             object obj = constructors[0].Invoke(null, new object[] { });
             Assert.Null(obj);
         }
@@ -71,6 +74,7 @@ namespace System.Reflection.Tests
         public void Invoke_StaticConstructor_ThrowsMemberAccessException()
         {
             ConstructorInfo[] constructors = GetConstructors(typeof(ClassWithStaticConstructor));
+            Assert.Equal(1, constructors.Length);
             Assert.Throws<MemberAccessException>(() => constructors[0].Invoke(new object[0]));
         }
 
@@ -83,7 +87,7 @@ namespace System.Reflection.Tests
             // Try to invoke Array ctors with different lengths
             foreach (int length in arraylength)
             {
-                // Create big Array with  elements 
+                // Create big Array with  elements
                 object[] arr = (object[])constructors[0].Invoke(new object[] { length });
                 Assert.Equal(arr.Length, length);
             }
@@ -97,7 +101,7 @@ namespace System.Reflection.Tests
             // Try to invoke Array ctors with different lengths
             foreach (int length in arraylength)
             {
-                // Create big Array with  elements 
+                // Create big Array with  elements
                 Assert.Throws<OverflowException>(() => (object[])constructors[0].Invoke(new object[] { length }));
             }
         }
@@ -137,13 +141,13 @@ namespace System.Reflection.Tests
         public void Invoke_ParameterWrongType_ThrowsArgumentException()
         {
             ConstructorInfo[] constructors = GetConstructors(typeof(ClassWith3Constructors));
-            Assert.Throws<ArgumentException>(null, () => (ClassWith3Constructors)constructors[1].Invoke(new object[] { "hello" }));
+            AssertExtensions.Throws<ArgumentException>(null, () => (ClassWith3Constructors)constructors[1].Invoke(new object[] { "hello" }));
         }
 
         [Fact]
         public void Invoke_ExistingInstance()
         {
-            // Should not prouce a second object.
+            // Should not produce a second object.
             ConstructorInfo[] constructors = GetConstructors(typeof(ClassWith3Constructors));
             ClassWith3Constructors obj1 = new ClassWith3Constructors(100, "hello");
             ClassWith3Constructors obj2 = (ClassWith3Constructors)constructors[2].Invoke(obj1, new object[] { 999, "initialized" });
@@ -174,18 +178,15 @@ namespace System.Reflection.Tests
             ConstructorInfo[] constructors = GetConstructors(typeof(StructWith1Constructor));
             StructWith1Constructor obj;
             obj = (StructWith1Constructor)constructors[0].Invoke(new object[] { 1, 2 });
-            Assert.Equal(obj.x, 1);
-            Assert.Equal(obj.y, 2);
+            Assert.Equal(1, obj.x);
+            Assert.Equal(2, obj.y);
         }
 
         [Fact]
         public void IsConstructor_ReturnsTrue()
         {
             ConstructorInfo[] constructors = GetConstructors(typeof(ClassWith3Constructors));
-            foreach (ConstructorInfo constructorInfo in constructors)
-            {
-                Assert.True(constructorInfo.IsConstructor);
-            }
+            Assert.All(constructors, constructorInfo => Assert.True(constructorInfo.IsConstructor));
         }
 
         [Fact]
@@ -230,7 +231,7 @@ namespace System.Reflection.Tests
         public string Method1(DateTime dt) => "";
     }
 
-    public class ClassWithStaticConstructor
+    public static class ClassWithStaticConstructor
     {
         static ClassWithStaticConstructor() { }
     }

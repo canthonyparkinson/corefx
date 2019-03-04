@@ -12,9 +12,9 @@
 using Microsoft.Win32;
 using System;
 using System.Collections;
-using System.Security.Principal;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Diagnostics.Contracts;
+using System.Security.Principal;
 
 namespace System.Security.AccessControl
 {
@@ -228,7 +228,6 @@ nameof(targetType));
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
             try
@@ -276,7 +275,7 @@ nameof(targetType));
                             result = _securityDescriptor.DiscretionaryAcl.RemoveAccess(AccessControlType.Allow, sid, -1, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, 0);
                             if (result == false)
                             {
-                                Contract.Assert(false, "Invalid operation");
+                                Debug.Assert(false, "Invalid operation");
                                 throw new InvalidOperationException();
                             }
 
@@ -317,7 +316,7 @@ nameof(modification),
                             result = _securityDescriptor.DiscretionaryAcl.RemoveAccess(AccessControlType.Deny, sid, -1, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, 0);
                             if (result == false)
                             {
-                                Contract.Assert(false, "Invalid operation");
+                                Debug.Assert(false, "Invalid operation");
                                 throw new InvalidOperationException();
                             }
 
@@ -335,7 +334,7 @@ nameof(modification),
                 }
                 else
                 {
-                    Contract.Assert(false, "rule.AccessControlType unrecognized");
+                    Debug.Assert(false, "rule.AccessControlType unrecognized");
                     throw new ArgumentException(SR.Format(SR.Arg_EnumIllegalVal, (int)rule.AccessControlType), "rule.AccessControlType");
                 }
 
@@ -359,7 +358,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
             try
@@ -443,7 +441,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -464,7 +461,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -485,7 +481,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -508,7 +503,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -534,7 +528,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -562,7 +555,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -588,7 +580,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -609,7 +600,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -630,7 +620,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -651,7 +640,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 
@@ -672,7 +660,6 @@ nameof(modification),
             {
                 throw new ArgumentNullException(nameof(rule));
             }
-            Contract.EndContractBlock();
 
             WriteLock();
 

@@ -8,6 +8,7 @@
 
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -121,7 +122,7 @@ namespace System.Data.SqlClient
             }
             if ((offset < 0) || (count < 0))
             {
-                throw ADP.ArgumentOutOfRange(String.Empty, (offset < 0 ? nameof(offset) : nameof(count)));
+                throw ADP.ArgumentOutOfRange(string.Empty, (offset < 0 ? nameof(offset) : nameof(count)));
             }
             if (buffer.Length - offset < count)
             {
@@ -289,7 +290,7 @@ namespace System.Data.SqlClient
 
         internal XmlReader ToXmlReader(bool async = false)
         {
-            return SqlTypes.SqlXml.CreateSqlXmlReader(this, closeInput: true, async: async);
+            return SqlTypeWorkarounds.SqlXmlCreateSqlXmlReader(this, closeInput: true, async: async);
         }
 
         override public long Seek(long offset, SeekOrigin origin)
@@ -422,7 +423,7 @@ namespace System.Data.SqlClient
 
             if ((offset < 0) || (count < 0))
             {
-                throw ADP.ArgumentOutOfRange(String.Empty, (offset < 0 ? nameof(offset) : nameof(count)));
+                throw ADP.ArgumentOutOfRange(string.Empty, (offset < 0 ? nameof(offset) : nameof(count)));
             }
 
             if (buffer.Length - offset < count)

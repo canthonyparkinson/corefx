@@ -6,11 +6,12 @@ using System.Collections.Generic;
 using System.Diagnostics.Tracing;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace System.Buffers.ArrayPool.Tests
 {
-    public partial class ArrayPoolUnitTests
+    public partial class ArrayPoolUnitTests : ArrayPoolTest
     {
         private const int MaxEventWaitTimeoutInMs = 200;
 
@@ -18,10 +19,10 @@ namespace System.Buffers.ArrayPool.Tests
         {
             internal string InternalRef;
         }
-            
+
         /*
             NOTE - due to test parallelism and sharing, use an instance pool for testing unless necessary
-        */ 
+        */
         [Fact]
         public static void SharedInstanceCreatesAnInstanceOnFirstCall()
         {
@@ -46,7 +47,7 @@ namespace System.Buffers.ArrayPool.Tests
         [InlineData(-1)]
         public static void CreatingAPoolWithInvalidArrayCountThrows(int length)
         {
-            Assert.Throws<ArgumentOutOfRangeException>("maxArraysPerBucket", () => ArrayPool<byte>.Create(maxArraysPerBucket: length, maxArrayLength: 16));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("maxArraysPerBucket", () => ArrayPool<byte>.Create(maxArraysPerBucket: length, maxArrayLength: 16));
         }
 
         [Theory]
@@ -54,7 +55,7 @@ namespace System.Buffers.ArrayPool.Tests
         [InlineData(-1)]
         public static void CreatingAPoolWithInvalidMaximumArraySizeThrows(int length)
         {
-            Assert.Throws<ArgumentOutOfRangeException>("maxArrayLength", () => ArrayPool<byte>.Create(maxArrayLength: length, maxArraysPerBucket: 1));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("maxArrayLength", () => ArrayPool<byte>.Create(maxArrayLength: length, maxArraysPerBucket: 1));
         }
 
         [Theory]
@@ -70,11 +71,10 @@ namespace System.Buffers.ArrayPool.Tests
         }
 
         [Theory]
-        [InlineData(-1)]
-        public static void RentingWithInvalidLengthThrows(int length)
+        [MemberData(nameof(BytePoolInstances))]
+        public static void RentingWithInvalidLengthThrows(ArrayPool<byte> pool)
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create();
-            Assert.Throws<ArgumentOutOfRangeException>("minimumLength", () => pool.Rent(length));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("minimumLength", () => pool.Rent(-1));
         }
 
         [Fact]
@@ -90,24 +90,25 @@ namespace System.Buffers.ArrayPool.Tests
             catch (OutOfMemoryException) { }
         }
 
-        [Fact]
-        public static void Renting0LengthArrayReturnsSingleton()
+        [Theory]
+        [MemberData(nameof(BytePoolInstances))]
+        public static void Renting0LengthArrayReturnsSingleton(ArrayPool<byte> pool)
         {
-            byte[] zero0 = ArrayPool<byte>.Shared.Rent(0);
-            byte[] zero1 = ArrayPool<byte>.Shared.Rent(0);
-            byte[] zero2 = ArrayPool<byte>.Shared.Rent(0);
-            byte[] one = ArrayPool<byte>.Shared.Rent(1);
+            byte[] zero0 = pool.Rent(0);
+            byte[] zero1 = pool.Rent(0);
+            byte[] zero2 = pool.Rent(0);
+            byte[] one = pool.Rent(1);
 
             Assert.Same(zero0, zero1);
             Assert.Same(zero1, zero2);
             Assert.NotSame(zero2, one);
 
-            ArrayPool<byte>.Shared.Return(zero0);
-            ArrayPool<byte>.Shared.Return(zero1);
-            ArrayPool<byte>.Shared.Return(zero2);
-            ArrayPool<byte>.Shared.Return(one);
+            pool.Return(zero0);
+            pool.Return(zero1);
+            pool.Return(zero2);
+            pool.Return(one);
 
-            Assert.Same(zero0, ArrayPool<byte>.Shared.Rent(0));
+            Assert.Same(zero0, pool.Rent(0));
         }
 
         [Fact]
@@ -140,11 +141,11 @@ namespace System.Buffers.ArrayPool.Tests
             Assert.NotNull(ArrayPool<byte>.Create(maxArrayLength: 100, maxArraysPerBucket: 1).Rent(200));
         }
 
-        [Fact]
-        public static void CallingReturnBufferWithNullBufferThrows()
+        [Theory]
+        [MemberData(nameof(BytePoolInstances))]
+        public static void CallingReturnBufferWithNullBufferThrows(ArrayPool<byte> pool)
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create();
-            Assert.Throws<ArgumentNullException>("array", () => pool.Return(null));
+            AssertExtensions.Throws<ArgumentNullException>("array", () => pool.Return(null));
         }
 
         private static void FillArray(byte[] buffer)
@@ -161,20 +162,20 @@ namespace System.Buffers.ArrayPool.Tests
             }
         }
 
-        [Fact]
-        public static void CallingReturnWithoutClearingDoesNotClearTheBuffer()
+        [Theory]
+        [MemberData(nameof(BytePoolInstances))]
+        public static void CallingReturnWithoutClearingDoesNotClearTheBuffer(ArrayPool<byte> pool)
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create();
             byte[] buffer = pool.Rent(4);
             FillArray(buffer);
             pool.Return(buffer, clearArray: false);
             CheckFilledArray(buffer, (byte b1, byte b2) => Assert.Equal(b1, b2));
         }
 
-        [Fact]
-        public static void CallingReturnWithClearingDoesClearTheBuffer()
+        [Theory]
+        [MemberData(nameof(BytePoolInstances))]
+        public static void CallingReturnWithClearingDoesClearTheBuffer(ArrayPool<byte> pool)
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create();
             byte[] buffer = pool.Rent(4);
             FillArray(buffer);
 
@@ -243,6 +244,10 @@ namespace System.Buffers.ArrayPool.Tests
             ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
             byte[] rented = pool.Rent(32);
             pool.Return(rented);
+
+            ArrayPool<byte>.Shared.Return(new byte[3 * 1024 * 1024]);
+            ArrayPool<char>.Shared.Return(new char[3 * 1024 * 1024]);
+            ArrayPool<string>.Shared.Return(new string[3 * 1024 * 1024]);
         }
 
         [Fact]
@@ -266,10 +271,10 @@ namespace System.Buffers.ArrayPool.Tests
             Assert.Equal(id, bt.GetHashCode());
         }
 
-        [Fact]
-        public static void CanRentManySizedBuffers()
+        [Theory]
+        [MemberData(nameof(BytePoolInstances))]
+        public static void CanRentManySizedBuffers(ArrayPool<byte> pool)
         {
-            var pool = ArrayPool<byte>.Create();
             for (int i = 1; i < 10000; i++)
             {
                 byte[] buffer = pool.Rent(i);
@@ -302,9 +307,56 @@ namespace System.Buffers.ArrayPool.Tests
         [InlineData(1024 * 1024 * 2, 1024 * 1024 * 2)]
         public static void RentingSpecificLengthsYieldsExpectedLengths(int requestedMinimum, int expectedLength)
         {
-            byte[] buffer = ArrayPool<byte>.Create().Rent(requestedMinimum);
-            Assert.NotNull(buffer);
-            Assert.Equal(expectedLength, buffer.Length);
+            foreach (ArrayPool<byte> pool in new[] { ArrayPool<byte>.Create(), ArrayPool<byte>.Shared })
+            {
+                byte[] buffer1 = pool.Rent(requestedMinimum);
+                byte[] buffer2 = pool.Rent(requestedMinimum);
+
+                Assert.NotNull(buffer1);
+                Assert.Equal(expectedLength, buffer1.Length);
+
+                Assert.NotNull(buffer2);
+                Assert.Equal(expectedLength, buffer2.Length);
+
+                Assert.NotSame(buffer1, buffer2);
+
+                pool.Return(buffer2);
+                pool.Return(buffer1);
+            }
+
+            foreach (ArrayPool<char> pool in new[] { ArrayPool<char>.Create(), ArrayPool<char>.Shared })
+            {
+                char[] buffer1 = pool.Rent(requestedMinimum);
+                char[] buffer2 = pool.Rent(requestedMinimum);
+
+                Assert.NotNull(buffer1);
+                Assert.Equal(expectedLength, buffer1.Length);
+
+                Assert.NotNull(buffer2);
+                Assert.Equal(expectedLength, buffer2.Length);
+
+                Assert.NotSame(buffer1, buffer2);
+
+                pool.Return(buffer2);
+                pool.Return(buffer1);
+            }
+
+            foreach (ArrayPool<string> pool in new[] { ArrayPool<string>.Create(), ArrayPool<string>.Shared })
+            {
+                string[] buffer1 = pool.Rent(requestedMinimum);
+                string[] buffer2 = pool.Rent(requestedMinimum);
+
+                Assert.NotNull(buffer1);
+                Assert.Equal(expectedLength, buffer1.Length);
+
+                Assert.NotNull(buffer2);
+                Assert.Equal(expectedLength, buffer2.Length);
+
+                Assert.NotSame(buffer1, buffer2);
+
+                pool.Return(buffer2);
+                pool.Return(buffer1);
+            }
         }
 
         [Fact]
@@ -346,92 +398,143 @@ namespace System.Buffers.ArrayPool.Tests
             Assert.Equal(64, pool.Rent(63).Length); // still get original size
         }
 
-        private static int RunWithListener(Action body, EventLevel level, Action<EventWrittenEventArgs> callback)
-        {
-            using (TestEventListener listener = new TestEventListener("System.Buffers.ArrayPoolEventSource", level))
-            {
-                int count = 0;
-                listener.RunWithCallback(e =>
-                {
-                    Interlocked.Increment(ref count);
-                    callback(e);
-                }, body);
-                return count;
-            }
-        }
-
         [Fact]
         public static void RentBufferFiresRentedDiagnosticEvent()
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
-
-            byte[] buffer = pool.Rent(16);
-            pool.Return(buffer);
-
-            Assert.Equal(1, RunWithListener(() => pool.Rent(16), EventLevel.Verbose, e =>
+            RemoteInvokeWithTrimming(() =>
             {
-                Assert.Equal(1, e.EventId);
-                Assert.Equal(buffer.GetHashCode(), e.Payload[0]);
-                Assert.Equal(buffer.Length, e.Payload[1]);
-                Assert.Equal(pool.GetHashCode(), e.Payload[2]);
-            }));
+                ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
+
+                byte[] buffer = pool.Rent(16);
+                pool.Return(buffer);
+
+                Assert.Equal(1, RunWithListener(() => pool.Rent(16), EventLevel.Verbose, e =>
+                {
+                    Assert.Equal(1, e.EventId);
+                    Assert.Equal(buffer.GetHashCode(), e.Payload[0]);
+                    Assert.Equal(buffer.Length, e.Payload[1]);
+                    Assert.Equal(pool.GetHashCode(), e.Payload[2]);
+                }));
+            });
         }
 
         [Fact]
         public static void ReturnBufferFiresDiagnosticEvent()
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
-            byte[] buffer = pool.Rent(16);
-            Assert.Equal(1, RunWithListener(() => pool.Return(buffer), EventLevel.Verbose, e =>
+            RemoteInvokeWithTrimming(() =>
             {
-                Assert.Equal(3, e.EventId);
-                Assert.Equal(buffer.GetHashCode(), e.Payload[0]);
-                Assert.Equal(buffer.Length, e.Payload[1]);
-                Assert.Equal(pool.GetHashCode(), e.Payload[2]);
-            }));
+                ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
+                byte[] buffer = pool.Rent(16);
+                Assert.Equal(1, RunWithListener(() => pool.Return(buffer), EventLevel.Verbose, e =>
+                {
+                    Assert.Equal(3, e.EventId);
+                    Assert.Equal(buffer.GetHashCode(), e.Payload[0]);
+                    Assert.Equal(buffer.Length, e.Payload[1]);
+                    Assert.Equal(pool.GetHashCode(), e.Payload[2]);
+                }));
+            });
         }
 
         [Fact]
         public static void RentingNonExistentBufferFiresAllocatedDiagnosticEvent()
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
-            Assert.Equal(1, RunWithListener(() => pool.Rent(16), EventLevel.Informational, e => Assert.Equal(2, e.EventId)));
+            RemoteInvokeWithTrimming(() =>
+            {
+                ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
+                Assert.Equal(1, RunWithListener(() => pool.Rent(16), EventLevel.Informational, e => Assert.Equal(2, e.EventId)));
+            });
         }
 
         [Fact]
         public static void RentingBufferOverConfiguredMaximumSizeFiresDiagnosticEvent()
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
-            Assert.Equal(1, RunWithListener(() => pool.Rent(64), EventLevel.Informational, e => Assert.Equal(2, e.EventId)));
+            RemoteInvokeWithTrimming(() =>
+            {
+                ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
+                Assert.Equal(1, RunWithListener(() => pool.Rent(64), EventLevel.Informational, e => Assert.Equal(2, e.EventId)));
+            });
         }
 
         [Fact]
         public static void RentingManyBuffersFiresExpectedDiagnosticEvents()
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 10);
-            var list = new List<EventWrittenEventArgs>();
-
-            Assert.Equal(60, RunWithListener(() =>
+            RemoteInvokeWithTrimming(() =>
             {
-                for (int i = 0; i < 10; i++) pool.Return(pool.Rent(16)); // 10 rents + 10 allocations, 10 returns
-                for (int i = 0; i < 10; i++) pool.Return(pool.Rent(0)); // 0 events for empty arrays
-                for (int i = 0; i < 10; i++) pool.Rent(16); // 10 rents
-                for (int i = 0; i < 10; i++) pool.Rent(16); // 10 rents + 10 allocations
-            }, EventLevel.Verbose, list.Add));
+                ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 10);
+                var list = new List<EventWrittenEventArgs>();
 
-            Assert.Equal(30, list.Where(e => e.EventId == 1).Count()); // rents
-            Assert.Equal(20, list.Where(e => e.EventId == 2).Count()); // allocations
-            Assert.Equal(10, list.Where(e => e.EventId == 3).Count()); // returns
+                Assert.Equal(60, RunWithListener(() =>
+                {
+                    for (int i = 0; i < 10; i++)
+                        pool.Return(pool.Rent(16)); // 10 rents + 10 allocations, 10 returns
+                    for (int i = 0; i < 10; i++)
+                        pool.Return(pool.Rent(0)); // 0 events for empty arrays
+                    for (int i = 0; i < 10; i++)
+                        pool.Rent(16); // 10 rents
+                    for (int i = 0; i < 10; i++)
+                        pool.Rent(16); // 10 rents + 10 allocations
+                }, EventLevel.Verbose, list.Add));
+
+                Assert.Equal(30, list.Where(e => e.EventId == 1).Count()); // rents
+                Assert.Equal(20, list.Where(e => e.EventId == 2).Count()); // allocations
+                Assert.Equal(10, list.Where(e => e.EventId == 3).Count()); // returns
+            });
         }
 
-        [Fact]
-        public static void ReturningANonPooledBufferOfDifferentSizeToThePoolThrows()
+        [Theory]
+        [MemberData(nameof(BytePoolInstances))]
+        public static void ReturningANonPooledBufferOfDifferentSizeToThePoolThrows(ArrayPool<byte> pool)
         {
-            ArrayPool<byte> pool = ArrayPool<byte>.Create(maxArrayLength: 16, maxArraysPerBucket: 1);
-            byte[] buffer = pool.Rent(15);
-            Assert.Throws<ArgumentException>("array", () => pool.Return(new byte[1]));
-            buffer = pool.Rent(15);
-            Assert.Equal(buffer.Length, 16);
+            AssertExtensions.Throws<ArgumentException>("array", () => pool.Return(new byte[1]));
+        }
+
+        [Theory]
+        [MemberData(nameof(BytePoolInstances))]
+        public static void RentAndReturnManyOfTheSameSize_NoneAreSame(ArrayPool<byte> pool)
+        {
+            foreach (int length in new[] { 1, 16, 32, 64, 127, 4096, 4097 })
+            {
+                for (int iter = 0; iter < 2; iter++)
+                {
+                    var buffers = new HashSet<byte[]>();
+                    for (int i = 0; i < 100; i++)
+                    {
+                        buffers.Add(pool.Rent(length));
+                    }
+
+                    Assert.Equal(100, buffers.Count);
+
+                    foreach (byte[] buffer in buffers)
+                    {
+                        pool.Return(buffer);
+                    }
+                }
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(BytePoolInstances))]
+        public static void UsePoolInParallel(ArrayPool<byte> pool)
+        {
+            int[] sizes = new int[] { 16, 32, 64, 128 };
+            Parallel.For(0, 250000, i =>
+            {
+                foreach (int size in sizes)
+                {
+                    byte[] array = pool.Rent(size);
+                    Assert.NotNull(array);
+                    Assert.InRange(array.Length, size, int.MaxValue);
+                    pool.Return(array);
+                }
+            });
+        }
+
+        public static IEnumerable<object[]> BytePoolInstances()
+        {
+            yield return new object[] { ArrayPool<byte>.Create() };
+            yield return new object[] { ArrayPool<byte>.Create(1024*1024, 50) };
+            yield return new object[] { ArrayPool<byte>.Create(1024*1024, 1) };
+            yield return new object[] { ArrayPool<byte>.Shared };
         }
     }
 }

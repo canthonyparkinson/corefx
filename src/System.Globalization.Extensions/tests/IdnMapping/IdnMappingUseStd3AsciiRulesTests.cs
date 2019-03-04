@@ -2,19 +2,20 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Runtime.InteropServices;
 using Xunit;
 
 namespace System.Globalization.Tests
 {
     /// <summary>
-    /// According to the ToASCII algorithm, if the UseSTD3ASCIIRules flag is set, 
-    /// then perform these checks: 
+    /// According to the ToASCII algorithm, if the UseSTD3ASCIIRules flag is set,
+    /// then perform these checks:
     ///
-    ///	(a) Verify the absence of non-LDH ASCII code points; that is, the absence 
+    ///	(a) Verify the absence of non-LDH ASCII code points; that is, the absence
     ///      of 0..2C, 2E..2F, 3A..40, 5B..60, and 7B..7F.
     ///
-    /// (b) Verify the absence of leading and trailing hyphen-minus; that is, the 
+    /// (b) Verify the absence of leading and trailing hyphen-minus; that is, the
     ///      absence of U+002D at the beginning and end of the sequence.
     ///
     /// By default this flag should not be set.
@@ -54,17 +55,14 @@ namespace System.Globalization.Tests
             if (containsInvalidHyphen && !s_isWindows)
             {
                 // ICU always fails on leading/trailing hyphens regardless of the Std3 rules option.
-                Assert.Throws<ArgumentException>("unicode", () => idnStd3False.GetAscii(unicode));
+                AssertExtensions.Throws<ArgumentException>("unicode", () => idnStd3False.GetAscii(unicode));
             }
             else
             {
                 Assert.Equal(unicode, idnStd3False.GetAscii(unicode));
             }
 
-            Exception exception = Record.Exception(() => idnStd3True.GetAscii(unicode));
-            Assert.True(exception is ArgumentException);
-            // sometimes the desktop returns "Unicode" instead of "unicode" for the parameter name.
-            Assert.True(((ArgumentException) exception).ParamName.Equals("unicode", StringComparison.OrdinalIgnoreCase));
+            AssertExtensions.Throws<ArgumentException>("unicode", () => idnStd3True.GetAscii(unicode));
         }
 
         [Fact]

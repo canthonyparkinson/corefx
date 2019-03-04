@@ -125,7 +125,7 @@ namespace System.Threading.Tasks.Dataflow
 
         internal void CompleteCore(Exception exception, bool storeExceptionEvenIfAlreadyCompleting, bool revertProcessingState = false)
         {
-            Contract.Requires(storeExceptionEvenIfAlreadyCompleting || !revertProcessingState,
+            Debug.Assert(storeExceptionEvenIfAlreadyCompleting || !revertProcessingState,
                             "Indicating dirty processing state may only come with storeExceptionEvenIfAlreadyCompleting==true.");
             Contract.EndContractBlock();
 
@@ -156,16 +156,16 @@ namespace System.Threading.Tasks.Dataflow
         public IDisposable LinkTo(ITargetBlock<T> target, DataflowLinkOptions linkOptions) { return _source.LinkTo(target, linkOptions); }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="TryReceive"]/*' />
-        public Boolean TryReceive(Predicate<T> filter, out T item) { return _source.TryReceive(filter, out item); }
+        public bool TryReceive(Predicate<T> filter, out T item) { return _source.TryReceive(filter, out item); }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="TryReceiveAll"]/*' />
-        Boolean IReceivableSourceBlock<T>.TryReceiveAll(out IList<T> items) { return _source.TryReceiveAll(out items); }
+        bool IReceivableSourceBlock<T>.TryReceiveAll(out IList<T> items) { return _source.TryReceiveAll(out items); }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Blocks/Member[@name="Completion"]/*' />
         public Task Completion { get { return _source.Completion; } }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Targets/Member[@name="OfferMessage"]/*' />
-        DataflowMessageStatus ITargetBlock<T>.OfferMessage(DataflowMessageHeader messageHeader, T messageValue, ISourceBlock<T> source, Boolean consumeToAccept)
+        DataflowMessageStatus ITargetBlock<T>.OfferMessage(DataflowMessageHeader messageHeader, T messageValue, ISourceBlock<T> source, bool consumeToAccept)
         {
             // Validate arguments
             if (!messageHeader.IsValid) throw new ArgumentException(SR.Argument_InvalidMessageHeader, nameof(messageHeader));
@@ -224,7 +224,7 @@ namespace System.Threading.Tasks.Dataflow
         /// <param name="numItemsRemoved">The number of items removed.</param>
         private void OnItemsRemoved(int numItemsRemoved)
         {
-            Contract.Requires(numItemsRemoved > 0, "Should only be called for a positive number of items removed.");
+            Debug.Assert(numItemsRemoved > 0, "Should only be called for a positive number of items removed.");
             Common.ContractAssertMonitorStatus(IncomingLock, held: false);
 
             // If we're bounding, we need to know when an item is removed so that we
@@ -288,7 +288,7 @@ namespace System.Threading.Tasks.Dataflow
         [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         private void ConsumeMessagesLoopCore()
         {
-            Contract.Requires(_boundingState != null && _boundingState.TaskForInputProcessing != null,
+            Debug.Assert(_boundingState != null && _boundingState.TaskForInputProcessing != null,
                 "May only be called in bounded mode and when a task is in flight.");
             Debug.Assert(_boundingState.TaskForInputProcessing.Id == Task.CurrentId,
                 "This must only be called from the in-flight processing task.");
@@ -334,7 +334,7 @@ namespace System.Threading.Tasks.Dataflow
         /// <remarks>This must only be called from the asynchronous processing loop.</remarks>
         private bool ConsumeAndStoreOneMessageIfAvailable()
         {
-            Contract.Requires(_boundingState != null && _boundingState.TaskForInputProcessing != null,
+            Debug.Assert(_boundingState != null && _boundingState.TaskForInputProcessing != null,
                 "May only be called in bounded mode and when a task is in flight.");
             Debug.Assert(_boundingState.TaskForInputProcessing.Id == Task.CurrentId,
                 "This must only be called from the in-flight processing task.");
@@ -408,7 +408,7 @@ namespace System.Threading.Tasks.Dataflow
                         if (exceptions != null)
                         {
                             // It is important to migrate these exceptions to the source part of the owning batch,
-                            // because that is the completion task that is publically exposed.
+                            // because that is the completion task that is publicly exposed.
                             thisBroadcastBlock._source.AddExceptions(exceptions);
                         }
 
@@ -424,7 +424,7 @@ namespace System.Threading.Tasks.Dataflow
         }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="ConsumeMessage"]/*' />
-        T ISourceBlock<T>.ConsumeMessage(DataflowMessageHeader messageHeader, ITargetBlock<T> target, out Boolean messageConsumed)
+        T ISourceBlock<T>.ConsumeMessage(DataflowMessageHeader messageHeader, ITargetBlock<T> target, out bool messageConsumed)
         {
             return _source.ConsumeMessage(messageHeader, target, out messageConsumed);
         }
@@ -476,7 +476,7 @@ namespace System.Threading.Tasks.Dataflow
             /// <param name="broadcastBlock">The BroadcastBlock being debugged.</param>
             public DebugView(BroadcastBlock<T> broadcastBlock)
             {
-                Contract.Requires(broadcastBlock != null, "Need a block with which to construct the debug view.");
+                Debug.Assert(broadcastBlock != null, "Need a block with which to construct the debug view.");
                 _broadcastBlock = broadcastBlock;
                 _sourceDebuggingInformation = broadcastBlock._source.GetDebuggingInformation();
             }
@@ -566,8 +566,8 @@ namespace System.Threading.Tasks.Dataflow
                 DataflowBlockOptions dataflowBlockOptions,
                 Action<int> itemsRemovedAction)
             {
-                Contract.Requires(owningSource != null, "Must be associated with a broadcast block.");
-                Contract.Requires(dataflowBlockOptions != null, "Options are required to configure this block.");
+                Debug.Assert(owningSource != null, "Must be associated with a broadcast block.");
+                Debug.Assert(dataflowBlockOptions != null, "Options are required to configure this block.");
 
                 // Store the arguments
                 _owningSource = owningSource;
@@ -580,7 +580,7 @@ namespace System.Threading.Tasks.Dataflow
             }
 
             /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="TryReceive"]/*' />
-            internal Boolean TryReceive(Predicate<TOutput> filter, out TOutput item)
+            internal bool TryReceive(Predicate<TOutput> filter, out TOutput item)
             {
                 // Take the lock only long enough to get the message,
                 // synchronizing with other activities on the block.
@@ -612,7 +612,7 @@ namespace System.Threading.Tasks.Dataflow
             }
 
             /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="TryReceiveAll"]/*' />
-            internal Boolean TryReceiveAll(out IList<TOutput> items)
+            internal bool TryReceiveAll(out IList<TOutput> items)
             {
                 // Try to receive the one item this block may have.
                 // If we can, give back an array of one item. Otherwise, give back null.
@@ -687,7 +687,7 @@ namespace System.Threading.Tasks.Dataflow
             /// <param name="target">The target to which to offer the current message.</param>
             private void OfferCurrentMessageToNewTarget(ITargetBlock<TOutput> target)
             {
-                Contract.Requires(target != null, "Target required to offer messages to.");
+                Debug.Assert(target != null, "Target required to offer messages to.");
                 Common.ContractAssertMonitorStatus(OutgoingLock, held: true);
                 Common.ContractAssertMonitorStatus(ValueLock, held: false);
 
@@ -960,8 +960,8 @@ namespace System.Threading.Tasks.Dataflow
             /// </summary>
             private void CompleteBlockIfPossible_Slow()
             {
-                Contract.Requires(_taskForOutputProcessing == null, "There must be no processing tasks.");
-                Contract.Requires(
+                Debug.Assert(_taskForOutputProcessing == null, "There must be no processing tasks.");
+                Debug.Assert(
                     (_decliningPermanently && _messages.Count == 0) || CanceledOrFaulted,
                     "There must be no more messages or the block must be canceled or faulted.");
 
@@ -1059,7 +1059,7 @@ namespace System.Threading.Tasks.Dataflow
             }
 
             /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="ConsumeMessage"]/*' />
-            internal TOutput ConsumeMessage(DataflowMessageHeader messageHeader, ITargetBlock<TOutput> target, out Boolean messageConsumed)
+            internal TOutput ConsumeMessage(DataflowMessageHeader messageHeader, ITargetBlock<TOutput> target, out bool messageConsumed)
             {
                 // Validate arguments
                 if (!messageHeader.IsValid) throw new ArgumentException(SR.Argument_InvalidMessageHeader, nameof(messageHeader));
@@ -1100,7 +1100,7 @@ namespace System.Threading.Tasks.Dataflow
             }
 
             /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Sources/Member[@name="ReserveMessage"]/*' />
-            internal Boolean ReserveMessage(DataflowMessageHeader messageHeader, ITargetBlock<TOutput> target)
+            internal bool ReserveMessage(DataflowMessageHeader messageHeader, ITargetBlock<TOutput> target)
             {
                 // Validate arguments
                 if (!messageHeader.IsValid) throw new ArgumentException(SR.Argument_InvalidMessageHeader, nameof(messageHeader));
@@ -1176,12 +1176,12 @@ namespace System.Threading.Tasks.Dataflow
                 }
             }
 
-            /// <summary>Adds an individual exceptionto this source.</summary>
+            /// <summary>Adds an individual exception to this source.</summary>
             /// <param name="exception">The exception to add</param>
             internal void AddException(Exception exception)
             {
-                Contract.Requires(exception != null, "An exception to add is required.");
-                Contract.Requires(!Completion.IsCompleted || Completion.IsFaulted, "The block must either not be completed or be faulted if we're still storing exceptions.");
+                Debug.Assert(exception != null, "An exception to add is required.");
+                Debug.Assert(!Completion.IsCompleted || Completion.IsFaulted, "The block must either not be completed or be faulted if we're still storing exceptions.");
                 lock (ValueLock)
                 {
                     Common.AddException(ref _exceptions, exception);
@@ -1192,8 +1192,8 @@ namespace System.Threading.Tasks.Dataflow
             /// <param name="exceptions">The exceptions to add</param>
             internal void AddExceptions(List<Exception> exceptions)
             {
-                Contract.Requires(exceptions != null, "A list of exceptions to add is required.");
-                Contract.Requires(!Completion.IsCompleted || Completion.IsFaulted, "The block must either not be completed or be faulted if we're still storing exceptions.");
+                Debug.Assert(exceptions != null, "A list of exceptions to add is required.");
+                Debug.Assert(!Completion.IsCompleted || Completion.IsFaulted, "The block must either not be completed or be faulted if we're still storing exceptions.");
                 lock (ValueLock)
                 {
                     foreach (Exception exception in exceptions)
@@ -1239,8 +1239,6 @@ namespace System.Threading.Tasks.Dataflow
                 public bool HasValue { get { return _source._currentMessageIsValid; } }
                 /// <summary>Gets the value of the source's current message.</summary>
                 public TOutput Value { get { return _source._currentMessage; } }
-                /// <summary>Gets the number of messages waiting to be made current.</summary>
-                public int InputCount { get { return _source._messages.Count; } }
                 /// <summary>Gets the messages available for receiving.</summary>
                 public IEnumerable<TOutput> InputQueue { get { return _source._messages.ToList(); } }
                 /// <summary>Gets the task being used for output processing.</summary>
@@ -1248,8 +1246,6 @@ namespace System.Threading.Tasks.Dataflow
 
                 /// <summary>Gets the DataflowBlockOptions used to configure this block.</summary>
                 public DataflowBlockOptions DataflowBlockOptions { get { return _source._dataflowBlockOptions; } }
-                /// <summary>Gets whether the block is declining further messages.</summary>
-                public bool IsDecliningPermanently { get { return _source._decliningPermanently; } }
                 /// <summary>Gets whether the block is completed.</summary>
                 public bool IsCompleted { get { return _source.Completion.IsCompleted; } }
 

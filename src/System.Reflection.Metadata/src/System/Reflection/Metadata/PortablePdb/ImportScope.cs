@@ -12,7 +12,7 @@ namespace System.Reflection.Metadata
     /// <remarks>
     /// See https://github.com/dotnet/corefx/blob/master/src/System.Reflection.Metadata/specs/PortablePdb-Metadata.md#importscope-table-0x35
     /// </remarks>
-    public struct ImportScope
+    public readonly struct ImportScope
     {
         private readonly MetadataReader _reader;
 
@@ -35,7 +35,7 @@ namespace System.Reflection.Metadata
 
         public ImportDefinitionCollection GetImports()
         {
-            return new ImportDefinitionCollection(_reader.BlobStream.GetMemoryBlock(ImportsBlob));
+            return new ImportDefinitionCollection(_reader.BlobHeap.GetMemoryBlock(ImportsBlob));
         }
     }
 }

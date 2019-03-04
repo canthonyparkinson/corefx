@@ -122,9 +122,9 @@ namespace System.Security.Cryptography.Hashing.Tests
             {
                 Assert.Throws<ArgumentNullException>(() => hash.ComputeHash((byte[])null, 0, 0));
                 Assert.Throws<ArgumentOutOfRangeException>(() => hash.ComputeHash(s_tenBytes, -1, 0));
-                Assert.Throws<ArgumentException>(() => hash.ComputeHash(s_tenBytes, 0, -1));
-                Assert.Throws<ArgumentException>(() => hash.ComputeHash(s_tenBytes, 0, 11));
-                Assert.Throws<ArgumentException>(() => hash.ComputeHash(s_tenBytes, 9, 2));
+                AssertExtensions.Throws<ArgumentException>(null, () => hash.ComputeHash(s_tenBytes, 0, -1));
+                AssertExtensions.Throws<ArgumentException>(null, () => hash.ComputeHash(s_tenBytes, 0, 11));
+                AssertExtensions.Throws<ArgumentException>(null, () => hash.ComputeHash(s_tenBytes, 9, 2));
 
                 hash.Dispose();
 
@@ -141,6 +141,20 @@ namespace System.Security.Cryptography.Hashing.Tests
                 Assert.Throws<NullReferenceException>(() => hash.ComputeHash((Stream)null));
 
                 hash.Dispose();
+
+                Assert.Throws<ObjectDisposedException>(() => hash.ComputeHash(stream));
+            }
+        }
+
+        [Fact]
+        public void ClearIsDispose()
+        {
+            using (var stream = new PositionValueStream(0))
+            using (HashAlgorithm hash = new Length32Hash())
+            {
+                Assert.Throws<NullReferenceException>(() => hash.ComputeHash((Stream)null));
+
+                hash.Clear();
 
                 Assert.Throws<ObjectDisposedException>(() => hash.ComputeHash(stream));
             }

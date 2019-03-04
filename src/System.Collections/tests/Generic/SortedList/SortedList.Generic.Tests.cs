@@ -1,9 +1,8 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using Xunit;
 
@@ -33,7 +32,9 @@ namespace System.Collections.Tests
             if (count > 0)
                 Assert.True(enumerator.MoveNext());
         }
-        
+
+        protected override Type ICollection_Generic_CopyTo_IndexLargerThanArrayCount_ThrowType => typeof(ArgumentOutOfRangeException);
+
         #endregion
 
         #region Constructor_IComparer
@@ -142,7 +143,7 @@ namespace System.Collections.Tests
         {
             SortedList<TKey, TValue> dictionary = (SortedList<TKey, TValue>)GenericIDictionaryFactory(count);
             int capacityBefore = dictionary.Capacity;
-            Assert.Throws<ArgumentOutOfRangeException>("value", () => dictionary.Capacity = -1);
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("value", () => dictionary.Capacity = -1);
             Assert.Equal(capacityBefore, dictionary.Capacity);
         }
 
@@ -154,7 +155,7 @@ namespace System.Collections.Tests
             for (int i = 0; i < count; i++)
             {
                 AddToCollection(dictionary, 1);
-                Assert.Throws<ArgumentOutOfRangeException>("value", () => dictionary.Capacity = i);
+                AssertExtensions.Throws<ArgumentOutOfRangeException>("value", () => dictionary.Capacity = i);
             }
         }
 

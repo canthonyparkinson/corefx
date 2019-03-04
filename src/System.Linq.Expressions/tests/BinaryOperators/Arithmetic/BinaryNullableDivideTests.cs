@@ -36,7 +36,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckNullableUShortDivideTest(bool useInterpreter)
         {
             ushort?[] array = { 0, 1, ushort.MaxValue, null };
@@ -49,7 +50,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckNullableShortDivideTest(bool useInterpreter)
         {
             short?[] array = { 0, 1, -1, short.MinValue, short.MaxValue, null };
@@ -62,7 +64,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckNullableUIntDivideTest(bool useInterpreter)
         {
             uint?[] array = { 0, 1, uint.MaxValue, null };
@@ -75,7 +78,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckNullableIntDivideTest(bool useInterpreter)
         {
             int?[] array = { 0, 1, -1, int.MinValue, int.MaxValue, null };
@@ -88,7 +92,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckNullableULongDivideTest(bool useInterpreter)
         {
             ulong?[] array = { 0, 1, ulong.MaxValue, null };
@@ -101,7 +106,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckNullableLongDivideTest(bool useInterpreter)
         {
             long?[] array = { 0, 1, -1, long.MinValue, long.MaxValue, null };
@@ -213,7 +219,7 @@ namespace System.Linq.Expressions.Tests
             if (a.HasValue && b == 0)
                 Assert.Throws<DivideByZeroException>(() => f());
             else
-                Assert.Equal((short?)(a / b), f());
+                Assert.Equal(unchecked((short?)(a / b)), f());
         }
 
         private static void VerifyNullableUIntDivide(uint? a, uint? b, bool useInterpreter)

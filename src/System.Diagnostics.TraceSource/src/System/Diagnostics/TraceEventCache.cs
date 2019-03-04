@@ -14,6 +14,7 @@ namespace System.Diagnostics
     {
         private long _timeStamp = -1;
         private DateTime _dateTime = DateTime.MinValue;
+        private string _stackTrace = null;
 
         public DateTime DateTime
         {
@@ -29,7 +30,7 @@ namespace System.Diagnostics
         {
             get
             {
-                return GetProcessId();
+                return TraceListenerHelpers.GetProcessId();
             }
         }
 
@@ -37,7 +38,7 @@ namespace System.Diagnostics
         {
             get
             {
-                return GetThreadId().ToString(CultureInfo.InvariantCulture);
+                return TraceListenerHelpers.GetThreadId().ToString(CultureInfo.InvariantCulture);
             }
         }
 
@@ -51,9 +52,25 @@ namespace System.Diagnostics
             }
         }
 
-        internal static int GetThreadId()
+        public string Callstack 
         {
-            return Environment.CurrentManagedThreadId;
+            get 
+            {
+                if (_stackTrace == null)
+                {
+                    _stackTrace = Environment.StackTrace;
+                }
+
+                return _stackTrace;
+            }
+        }
+
+        public Stack LogicalOperationStack 
+        {
+            get 
+            {
+                return Trace.CorrelationManager.LogicalOperationStack;
+            }
         }
     }
 }

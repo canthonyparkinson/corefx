@@ -605,6 +605,7 @@ namespace System.Linq.Parallel.Tests
         }
 
         [Theory]
+        [ActiveIssue(21876, TestPlatforms.Linux)]
         [MemberData(nameof(UnaryCancelingOperators))]
         [MemberData(nameof(BinaryCancelingOperators))]
         [MemberData(nameof(OrderCancelingOperators))]
@@ -776,6 +777,7 @@ namespace System.Linq.Parallel.Tests
         [MemberData(nameof(UnaryCancelingOperators))]
         [MemberData(nameof(BinaryCancelingOperators))]
         [MemberData(nameof(OrderCancelingOperators))]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, ".NET Core bug fix https://github.com/dotnet/corefx/pull/2307")]
         public static void ToArray_OperationCanceledException_PreCanceled(Labeled<Func<ParallelQuery<int>, Action, ParallelQuery<int>>> operation)
         {
             AssertThrows.AlreadyCanceled(source => operation.Item(source, () => { }).ToArray());
@@ -882,7 +884,8 @@ namespace System.Linq.Parallel.Tests
             Action canceler = () => { throw new OperationCanceledException(cs.Token); };
 
             AggregateException outer = Assert.Throws<AggregateException>(() => query(new CancellationTokenSource().Token, canceler));
-            AggregateException ae = Assert.Single<AggregateException>(outer.InnerExceptions.Cast<AggregateException>());
+            Exception inner = Assert.Single(outer.InnerExceptions);
+            AggregateException ae = Assert.IsType<AggregateException>(inner);
             Assert.All(ae.InnerExceptions, e => Assert.IsType<OperationCanceledException>(e));
         }
 
@@ -892,7 +895,8 @@ namespace System.Linq.Parallel.Tests
             Action canceler = () => { throw new OperationCanceledException(token); };
 
             AggregateException outer = Assert.Throws<AggregateException>(() => query(token, canceler));
-            AggregateException ae = Assert.Single<AggregateException>(outer.InnerExceptions.Cast<AggregateException>());
+            Exception inner = Assert.Single(outer.InnerExceptions);
+            AggregateException ae = Assert.IsType<AggregateException>(inner);
             Assert.All(ae.InnerExceptions, e => Assert.IsType<OperationCanceledException>(e));
         }
     }

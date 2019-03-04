@@ -22,7 +22,7 @@ namespace System.Reflection.PortableExecutable
         private const string RelocationSectionName = ".reloc";
 
         private readonly PEDirectoriesBuilder _peDirectoriesBuilder;
-        private readonly TypeSystemMetadataSerializer _metadataSerializer;
+        private readonly MetadataRootBuilder _metadataRootBuilder;
         private readonly BlobBuilder _ilStream;
         private readonly BlobBuilder _mappedFieldDataOpt;
         private readonly BlobBuilder _managedResourcesOpt;
@@ -37,7 +37,7 @@ namespace System.Reflection.PortableExecutable
 
         public ManagedPEBuilder(
             PEHeaderBuilder header,
-            TypeSystemMetadataSerializer metadataSerializer,
+            MetadataRootBuilder metadataRootBuilder,
             BlobBuilder ilStream,
             BlobBuilder mappedFieldData = null,
             BlobBuilder managedResources = null,
@@ -54,9 +54,9 @@ namespace System.Reflection.PortableExecutable
                 Throw.ArgumentNull(nameof(header));
             }
 
-            if (metadataSerializer == null)
+            if (metadataRootBuilder == null)
             {
-                Throw.ArgumentNull(nameof(metadataSerializer));
+                Throw.ArgumentNull(nameof(metadataRootBuilder));
             }
 
             if (ilStream == null)
@@ -69,7 +69,7 @@ namespace System.Reflection.PortableExecutable
                 Throw.ArgumentOutOfRange(nameof(strongNameSignatureSize));
             }
 
-            _metadataSerializer = metadataSerializer;
+            _metadataRootBuilder = metadataRootBuilder;
             _ilStream = ilStream;
             _mappedFieldDataOpt = mappedFieldData;
             _managedResourcesOpt = managedResources;
@@ -135,7 +135,7 @@ namespace System.Reflection.PortableExecutable
             var sectionBuilder = new BlobBuilder();
             var metadataBuilder = new BlobBuilder();
 
-            var metadataSizes = _metadataSerializer.MetadataSizes;
+            var metadataSizes = _metadataRootBuilder.Sizes;
 
             var textSection = new ManagedTextSection(
                 imageCharacteristics: Header.ImageCharacteristics,
@@ -149,7 +149,7 @@ namespace System.Reflection.PortableExecutable
 
             int methodBodyStreamRva = location.RelativeVirtualAddress + textSection.OffsetToILStream;
             int mappedFieldDataStreamRva = location.RelativeVirtualAddress + textSection.CalculateOffsetToMappedFieldDataStream();
-            _metadataSerializer.SerializeMetadata(metadataBuilder, methodBodyStreamRva, mappedFieldDataStreamRva);
+            _metadataRootBuilder.Serialize(metadataBuilder, methodBodyStreamRva, mappedFieldDataStreamRva);
 
             DirectoryEntry debugDirectoryEntry;
             BlobBuilder debugTableBuilderOpt;
@@ -221,7 +221,7 @@ namespace System.Reflection.PortableExecutable
             builder.WriteUInt32((((uint)entryPointAddress + 2) / 0x1000) * 0x1000);
             builder.WriteUInt32((machine == Machine.IA64) ? 14u : 12u);
             uint offsetWithinPage = ((uint)entryPointAddress + 2) % 0x1000;
-            uint relocType = (machine == Machine.Amd64 || machine == Machine.IA64) ? 10u : 3u;
+            uint relocType = (machine == Machine.Amd64 || machine == Machine.IA64 || machine == Machine.Arm64) ? 10u : 3u;
             ushort s = (ushort)((relocType << 12) | offsetWithinPage);
             builder.WriteUInt16(s);
             if (machine == Machine.IA64)
@@ -237,59 +237,19 @@ namespace System.Reflection.PortableExecutable
             return _peDirectoriesBuilder;
         }
 
-        private IEnumerable<Blob> GetContentToSign(BlobBuilder peImage)
-        {
-            // Signed content includes 
-            // - PE header without its alignment padding
-            // - all sections including their alignment padding and excluding strong name signature blob
-
-            int remainingHeader = Header.ComputeSizeOfPeHeaders(GetSections().Length);
-            foreach (var blob in peImage.GetBlobs())
-            {
-                if (remainingHeader > 0)
-                {
-                    int length = Math.Min(remainingHeader, blob.Length);
-                    yield return new Blob(blob.Buffer, blob.Start, length);
-                    remainingHeader -= length;
-                }
-                else if (blob.Buffer == _lazyStrongNameSignature.Buffer)
-                {
-                    yield return new Blob(blob.Buffer, blob.Start, _lazyStrongNameSignature.Start - blob.Start);
-                    yield return new Blob(blob.Buffer, _lazyStrongNameSignature.Start + _lazyStrongNameSignature.Length, blob.Length - _lazyStrongNameSignature.Length);
-                }
-                else
-                {
-                    yield return new Blob(blob.Buffer, blob.Start, blob.Length);
-                }
-            }
-        }
-
         public void Sign(BlobBuilder peImage, Func<IEnumerable<Blob>, byte[]> signatureProvider)
         {
             if (peImage == null)
             {
-                throw new ArgumentNullException(nameof(peImage));
+                Throw.ArgumentNull(nameof(peImage));
             }
 
             if (signatureProvider == null)
             {
-                throw new ArgumentNullException(nameof(signatureProvider));
+                Throw.ArgumentNull(nameof(signatureProvider));
             }
 
-            var content = GetContentToSign(peImage);
-            byte[] signature = signatureProvider(content);
-
-            // signature may be shorter (the rest of the reserved space is padding):
-            if (signature == null || signature.Length > _lazyStrongNameSignature.Length)
-            {
-                throw new InvalidOperationException(SR.SignatureProviderReturnedInvalidSignature);
-            }
-
-            // TODO: Native csc also calculates and fills checksum in the PE header
-            // Using MapFileAndCheckSum() from imagehlp.dll.
-
-            var writer = new BlobWriter(_lazyStrongNameSignature);
-            writer.WriteBytes(signature);
+            Sign(peImage, _lazyStrongNameSignature, signatureProvider);
         }
     }
 }

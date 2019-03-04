@@ -22,7 +22,7 @@ internal static partial class Interop
         // NOTE: `_isIPv6` cannot be of type `bool` because `bool` is not a blittable type and this struct is
         //       embedded in other structs for interop purposes.
         [StructLayout(LayoutKind.Sequential)]
-        internal unsafe struct IPAddress
+        internal unsafe struct IPAddress : IEquatable<IPAddress>
         {
             public bool IsIPv6
             {
@@ -33,35 +33,46 @@ internal static partial class Interop
             internal fixed byte Address[MAX_IP_ADDRESS_BYTES]; // Buffer to fit an IPv4 or IPv6 address
             private  uint _isIPv6;                             // Non-zero if this is an IPv6 address; zero for IPv4.
             internal uint ScopeId;                             // Scope ID (IPv6 only)
-        }
 
-        [DllImport(Libraries.SystemNative, EntryPoint = "SystemNative_IPv6StringToAddress", SetLastError = true)]
-        internal static extern int IPv6StringToAddress(string address, string port, byte[] buffer, int bufferLength, out uint scope);
-
-        [DllImport(Libraries.SystemNative, EntryPoint = "SystemNative_IPv4StringToAddress", SetLastError = true)]
-        internal static extern int IPv4StringToAddress(string address, byte[] buffer, int bufferLength, out ushort port);
-
-        [DllImport(Libraries.SystemNative, EntryPoint = "SystemNative_IPAddressToString")]
-        internal unsafe static extern int IPAddressToString(byte* address, int addressLength, bool isIPv6, byte* str, int stringLength, uint scope = 0);
-
-        internal unsafe static uint IPAddressToString(byte[] address, bool isIPv6, StringBuilder addressString, uint scope = 0)
-        {
-            Debug.Assert(address != null, "address was null");
-            Debug.Assert((address.Length == IPv4AddressBytes) || (address.Length == IPv6AddressBytes), $"Unexpected address length: {address.Length}");
-
-            int err;
-            fixed (byte* rawAddress = address)
+            public bool Equals(IPAddress other)
             {
-                int bufferLength = isIPv6 ? INET6_ADDRSTRLEN : INET_ADDRSTRLEN;
-                byte* buffer = stackalloc byte[bufferLength];
-                err = IPAddressToString(rawAddress, address.Length, isIPv6, buffer, bufferLength, scope);
-                if (err == 0)
+                int addressByteCount;
+                if (IsIPv6)
                 {
-                    addressString.Append(Marshal.PtrToStringAnsi((IntPtr)buffer));
-                }
-            }
+                    if (!other.IsIPv6)
+                    {
+                        return false;
+                    }
+                    if (ScopeId != other.ScopeId)
+                    {
+                        return false;
+                    }
 
-            return unchecked((uint)err);
+                    addressByteCount = IPv6AddressBytes;
+                }
+                else
+                {
+                    if (other.IsIPv6)
+                    {
+                        return false;
+                    }
+
+                    addressByteCount = IPv4AddressBytes;
+                }
+
+                fixed (byte* thisAddress = Address)
+                {
+                    for (int i = 0; i < addressByteCount; i++)
+                    {
+                        if (thisAddress[i] != other.Address[i])
+                        {
+                            return false;
+                        }
+                    }
+                }
+
+                return true;
+            }
         }
     }
 }

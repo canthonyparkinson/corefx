@@ -2,21 +2,24 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.Serialization;
 
 namespace System.Collections.Generic
 {
     [DebuggerTypeProxy(typeof(IDictionaryDebugView<,>))]
     [DebuggerDisplay("Count = {Count}")]
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class SortedDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDictionary, IReadOnlyDictionary<TKey, TValue>
     {
+        [NonSerialized]
         private KeyCollection _keys;
-
+        [NonSerialized]
         private ValueCollection _values;
 
-        private TreeSet<KeyValuePair<TKey, TValue>> _set;
+        private TreeSet<KeyValuePair<TKey, TValue>> _set; // Do not rename (binary serialization)
 
         public SortedDictionary() : this((IComparer<TKey>)null)
         {
@@ -105,7 +108,7 @@ namespace System.Collections.Generic
                 TreeSet<KeyValuePair<TKey, TValue>>.Node node = _set.FindNode(new KeyValuePair<TKey, TValue>(key, default(TValue)));
                 if (node == null)
                 {
-                    throw new KeyNotFoundException();
+                    throw new KeyNotFoundException(SR.Format(SR.Arg_KeyNotFoundWithKey, key.ToString()));
                 }
 
                 return node.Item.Value;
@@ -589,7 +592,7 @@ namespace System.Collections.Generic
 
                 if (index < 0)
                 {
-                    throw new ArgumentOutOfRangeException(nameof(index), index , SR.ArgumentOutOfRange_NeedNonNegNum);
+                    throw new ArgumentOutOfRangeException(nameof(index), index, SR.ArgumentOutOfRange_NeedNonNegNum);
                 }
 
                 if (array.Length - index < Count)
@@ -681,7 +684,7 @@ namespace System.Collections.Generic
                 get { return false; }
             }
 
-            Object ICollection.SyncRoot
+            object ICollection.SyncRoot
             {
                 get { return ((ICollection)_dictionary).SyncRoot; }
             }
@@ -865,7 +868,7 @@ namespace System.Collections.Generic
                 get { return false; }
             }
 
-            Object ICollection.SyncRoot
+            object ICollection.SyncRoot
             {
                 get { return ((ICollection)_dictionary).SyncRoot; }
             }
@@ -918,9 +921,10 @@ namespace System.Collections.Generic
             }
         }
 
-        internal sealed class KeyValuePairComparer : Comparer<KeyValuePair<TKey, TValue>>
+        [Serializable]
+        public sealed class KeyValuePairComparer : Comparer<KeyValuePair<TKey, TValue>>
         {
-            internal IComparer<TKey> keyComparer;
+            internal IComparer<TKey> keyComparer; // Do not rename (binary serialization)
 
             public KeyValuePairComparer(IComparer<TKey> keyComparer)
             {
@@ -943,7 +947,7 @@ namespace System.Collections.Generic
 
     /// <summary>
     /// This class is intended as a helper for backwards compatibility with existing SortedDictionaries.
-    /// TreeSet has been converted into SortedSet<T>, which will be exposed publicly. SortedDictionaries
+    /// TreeSet has been converted into SortedSet{T}, which will be exposed publicly. SortedDictionaries
     /// have the problem where they have already been serialized to disk as having a backing class named
     /// TreeSet. To ensure that we can read back anything that has already been written to disk, we need to
     /// make sure that we have a class named TreeSet that does everything the way it used to.
@@ -951,7 +955,9 @@ namespace System.Collections.Generic
     /// The only thing that makes it different from SortedSet is that it throws on duplicates
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    internal sealed class TreeSet<T> : SortedSet<T>
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
+    public sealed class TreeSet<T> : SortedSet<T>
     {
         public TreeSet()
             : base()
@@ -959,9 +965,7 @@ namespace System.Collections.Generic
 
         public TreeSet(IComparer<T> comparer) : base(comparer) { }
 
-        public TreeSet(ICollection<T> collection) : base(collection) { }
-
-        public TreeSet(ICollection<T> collection, IComparer<T> comparer) : base(collection, comparer) { }
+        private TreeSet(SerializationInfo siInfo, StreamingContext context) : base(siInfo, context) { }
 
         internal override bool AddIfNotPresent(T item)
         {

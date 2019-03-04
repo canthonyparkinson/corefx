@@ -2,14 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using Microsoft.Win32.SafeHandles;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Security;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32.SafeHandles;
 
 namespace System.IO.Pipes
 {
@@ -18,10 +20,18 @@ namespace System.IO.Pipes
     /// </summary>
     public sealed partial class NamedPipeServerStream : PipeStream
     {
-        [SecurityCritical]
         private void Create(string pipeName, PipeDirection direction, int maxNumberOfServerInstances,
                 PipeTransmissionMode transmissionMode, PipeOptions options, int inBufferSize, int outBufferSize,
                 HandleInheritability inheritability)
+        {
+            Create(pipeName, direction, maxNumberOfServerInstances, transmissionMode, options, inBufferSize,
+                outBufferSize, null, inheritability, 0);
+        }
+
+        // This overload is used in Mono to implement public constructors.
+        private void Create(string pipeName, PipeDirection direction, int maxNumberOfServerInstances,
+                PipeTransmissionMode transmissionMode, PipeOptions options, int inBufferSize, int outBufferSize,
+                PipeSecurity pipeSecurity, HandleInheritability inheritability, PipeAccessRights additionalAccessRights)
         {
             Debug.Assert(pipeName != null && pipeName.Length != 0, "fullPipeName is null or empty");
             Debug.Assert(direction >= PipeDirection.In && direction <= PipeDirection.InOut, "invalid pipe direction");
@@ -33,15 +43,38 @@ namespace System.IO.Pipes
             string fullPipeName = Path.GetFullPath(@"\\.\pipe\" + pipeName);
 
             // Make sure the pipe name isn't one of our reserved names for anonymous pipes.
-            if (String.Equals(fullPipeName, @"\\.\pipe\anonymous", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(fullPipeName, @"\\.\pipe\anonymous", StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentOutOfRangeException(nameof(pipeName), SR.ArgumentOutOfRange_AnonymousReserved);
             }
 
+            if (IsCurrentUserOnly)
+            {
+                Debug.Assert(pipeSecurity == null);
+
+                using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
+                {
+                    SecurityIdentifier identifier = currentIdentity.Owner;
+
+                    // Grant full control to the owner so multiple servers can be opened.
+                    // Full control is the default per MSDN docs for CreateNamedPipe.
+                    PipeAccessRule rule = new PipeAccessRule(identifier, PipeAccessRights.FullControl, AccessControlType.Allow);
+                    pipeSecurity = new PipeSecurity();
+
+                    pipeSecurity.AddAccessRule(rule);
+                    pipeSecurity.SetOwner(identifier);
+                }
+
+                // PipeOptions.CurrentUserOnly is special since it doesn't match directly to a corresponding Win32 valid flag.
+                // Remove it, while keeping others untouched since historically this has been used as a way to pass flags to CreateNamedPipe
+                // that were not defined in the enumeration.
+                options &= ~PipeOptions.CurrentUserOnly;
+            }
 
             int openMode = ((int)direction) |
-                           (maxNumberOfServerInstances == 1 ? Interop.mincore.FileOperations.FILE_FLAG_FIRST_PIPE_INSTANCE : 0) |
-                           (int)options;
+                           (maxNumberOfServerInstances == 1 ? Interop.Kernel32.FileOperations.FILE_FLAG_FIRST_PIPE_INSTANCE : 0) |
+                           (int)options |
+                           (int)additionalAccessRights;
 
             // We automatically set the ReadMode to match the TransmissionMode.
             int pipeModes = (int)transmissionMode << 2 | (int)transmissionMode << 1;
@@ -52,16 +85,27 @@ namespace System.IO.Pipes
                 maxNumberOfServerInstances = 255;
             }
 
-            Interop.mincore.SECURITY_ATTRIBUTES secAttrs = PipeStream.GetSecAttrs(inheritability);
-            SafePipeHandle handle = Interop.mincore.CreateNamedPipe(fullPipeName, openMode, pipeModes,
-                maxNumberOfServerInstances, outBufferSize, inBufferSize, 0, ref secAttrs);
-
-            if (handle.IsInvalid)
+            var pinningHandle = new GCHandle();
+            try
             {
-                throw Win32Marshal.GetExceptionForLastWin32Error();
-            }
+                Interop.Kernel32.SECURITY_ATTRIBUTES secAttrs = PipeStream.GetSecAttrs(inheritability, pipeSecurity, ref pinningHandle);
+                SafePipeHandle handle = Interop.Kernel32.CreateNamedPipe(fullPipeName, openMode, pipeModes,
+                    maxNumberOfServerInstances, outBufferSize, inBufferSize, 0, ref secAttrs);
 
-            InitializeHandle(handle, false, (options & PipeOptions.Asynchronous) != 0);
+                if (handle.IsInvalid)
+                {
+                    throw Win32Marshal.GetExceptionForLastWin32Error();
+                }
+
+                InitializeHandle(handle, false, (options & PipeOptions.Asynchronous) != 0);
+            }
+            finally
+            {
+                if (pinningHandle.IsAllocated)
+                {
+                    pinningHandle.Free();
+                }
+            }
         }
 
         // This will wait until the client calls Connect().  If we return from this method, we guarantee that
@@ -69,7 +113,6 @@ namespace System.IO.Pipes
         // was called (but not before this server is been created, or, if we were servicing another client, 
         // not before we called Disconnect), in which case, there may be some buffer already in the pipe waiting
         // for us to read.  See NamedPipeClientStream.Connect for more information.
-        [SecurityCritical]
         [SuppressMessage("Microsoft.Security", "CA2122:DoNotIndirectlyExposeMethodsWithLinkDemands", Justification = "Security model of pipes: demand at creation but no subsequent demands")]
         public void WaitForConnection()
         {
@@ -81,17 +124,17 @@ namespace System.IO.Pipes
             }
             else
             {
-                if (!Interop.mincore.ConnectNamedPipe(InternalHandle, IntPtr.Zero))
+                if (!Interop.Kernel32.ConnectNamedPipe(InternalHandle, IntPtr.Zero))
                 {
                     int errorCode = Marshal.GetLastWin32Error();
 
-                    if (errorCode != Interop.mincore.Errors.ERROR_PIPE_CONNECTED)
+                    if (errorCode != Interop.Errors.ERROR_PIPE_CONNECTED)
                     {
                         throw Win32Marshal.GetExceptionForWin32Error(errorCode);
                     }
 
                     // pipe already connected
-                    if (errorCode == Interop.mincore.Errors.ERROR_PIPE_CONNECTED && State == PipeState.Connected)
+                    if (errorCode == Interop.Errors.ERROR_PIPE_CONNECTED && State == PipeState.Connected)
                     {
                         throw new InvalidOperationException(SR.InvalidOperation_PipeAlreadyConnected);
                     }
@@ -120,13 +163,12 @@ namespace System.IO.Pipes
             return WaitForConnectionCoreAsync(cancellationToken);
         }
 
-        [SecurityCritical]
         public void Disconnect()
         {
             CheckDisconnectOperations();
 
             // Disconnect the pipe.
-            if (!Interop.mincore.DisconnectNamedPipe(InternalHandle))
+            if (!Interop.Kernel32.DisconnectNamedPipe(InternalHandle))
             {
                 throw Win32Marshal.GetExceptionForLastWin32Error();
             }
@@ -134,35 +176,32 @@ namespace System.IO.Pipes
             State = PipeState.Disconnected;
         }
 
-        // Gets the username of the connected client.  Not that we will not have access to the client's 
+        // Gets the username of the connected client.  Note that we will not have access to the client's 
         // username until it has written at least once to the pipe (and has set its impersonationLevel 
         // argument appropriately). 
-        [SecurityCritical]
-        public String GetImpersonationUserName()
+        public unsafe string GetImpersonationUserName()
         {
             CheckWriteOperations();
 
-            StringBuilder userName = new StringBuilder(Interop.mincore.CREDUI_MAX_USERNAME_LENGTH + 1);
+            const int UserNameMaxLength = Interop.Kernel32.CREDUI_MAX_USERNAME_LENGTH + 1;
+            char* userName = stackalloc char[UserNameMaxLength]; // ~1K
 
-            if (!Interop.mincore.GetNamedPipeHandleState(InternalHandle, IntPtr.Zero, IntPtr.Zero,
-                IntPtr.Zero, IntPtr.Zero, userName, userName.Capacity))
+            if (!Interop.Kernel32.GetNamedPipeHandleState(InternalHandle, IntPtr.Zero, IntPtr.Zero,
+                IntPtr.Zero, IntPtr.Zero, userName, UserNameMaxLength))
             {
                 throw WinIOError(Marshal.GetLastWin32Error());
             }
 
-            return userName.ToString();
+            return new string(userName);
         }
 
         // -----------------------------
         // ---- PAL layer ends here ----
         // -----------------------------
 
-#if RunAs
         // This method calls a delegate while impersonating the client. Note that we will not have
         // access to the client's security token until it has written at least once to the pipe 
         // (and has set its impersonationLevel argument appropriately). 
-        [SecurityCritical]
-        [SecurityPermissionAttribute(SecurityAction.Demand, Flags = SecurityPermissionFlag.ControlPrincipal)]
         public void RunAsClient(PipeStreamImpersonationWorker impersonationWorker)
         {
             CheckWriteOperations();
@@ -172,11 +211,11 @@ namespace System.IO.Pipes
             // now handle win32 impersonate/revert specific errors by throwing corresponding exceptions
             if (execHelper._impersonateErrorCode != 0)
             {
-                WinIOError(execHelper._impersonateErrorCode);
+                throw WinIOError(execHelper._impersonateErrorCode);
             }
             else if (execHelper._revertImpersonateErrorCode != 0)
             {
-                WinIOError(execHelper._revertImpersonateErrorCode);
+                throw WinIOError(execHelper._revertImpersonateErrorCode);
             }
         }
 
@@ -185,8 +224,7 @@ namespace System.IO.Pipes
         private static RuntimeHelpers.TryCode tryCode = new RuntimeHelpers.TryCode(ImpersonateAndTryCode);
         private static RuntimeHelpers.CleanupCode cleanupCode = new RuntimeHelpers.CleanupCode(RevertImpersonationOnBackout);
 
-        [SecurityCritical]
-        private static void ImpersonateAndTryCode(Object helper)
+        private static void ImpersonateAndTryCode(object helper)
         {
             ExecuteHelper execHelper = (ExecuteHelper)helper;
 
@@ -194,7 +232,7 @@ namespace System.IO.Pipes
             try { }
             finally
             {
-                if (UnsafeNativeMethods.ImpersonateNamedPipeClient(execHelper._handle))
+                if (Interop.Advapi32.ImpersonateNamedPipeClient(execHelper._handle))
                 {
                     execHelper._mustRevert = true;
                 }
@@ -211,15 +249,13 @@ namespace System.IO.Pipes
             }
         }
 
-        [SecurityCritical]
-        [PrePrepareMethod]
-        private static void RevertImpersonationOnBackout(Object helper, bool exceptionThrown)
+        private static void RevertImpersonationOnBackout(object helper, bool exceptionThrown)
         {
             ExecuteHelper execHelper = (ExecuteHelper)helper;
 
             if (execHelper._mustRevert)
             {
-                if (!UnsafeNativeMethods.RevertToSelf())
+                if (!Interop.Advapi32.RevertToSelf())
                 {
                     execHelper._revertImpersonateErrorCode = Marshal.GetLastWin32Error();
                 }
@@ -234,17 +270,14 @@ namespace System.IO.Pipes
             internal int _impersonateErrorCode;
             internal int _revertImpersonateErrorCode;
 
-            [SecurityCritical]
             internal ExecuteHelper(PipeStreamImpersonationWorker userCode, SafePipeHandle handle)
             {
                 _userCode = userCode;
                 _handle = handle;
             }
         }
-#endif
 
         // Async version of WaitForConnection.  See the comments above for more info.
-        [SecurityCritical]
         private unsafe Task WaitForConnectionCoreAsync(CancellationToken cancellationToken)
         {
             CheckConnectOperationsServerWithHandle();
@@ -254,20 +287,20 @@ namespace System.IO.Pipes
                 throw new InvalidOperationException(SR.InvalidOperation_PipeNotAsync);
             }
 
-            var completionSource = new ConnectionCompletionSource(this, cancellationToken);
+            var completionSource = new ConnectionCompletionSource(this);
 
-            if (!Interop.mincore.ConnectNamedPipe(InternalHandle, completionSource.Overlapped))
+            if (!Interop.Kernel32.ConnectNamedPipe(InternalHandle, completionSource.Overlapped))
             {
                 int errorCode = Marshal.GetLastWin32Error();
 
                 switch (errorCode)
                 {
-                    case Interop.mincore.Errors.ERROR_IO_PENDING:
+                    case Interop.Errors.ERROR_IO_PENDING:
                         break;
 
                     // If we are here then the pipe is already connected, or there was an error
                     // so we should unpin and free the overlapped.
-                    case Interop.mincore.Errors.ERROR_PIPE_CONNECTED:
+                    case Interop.Errors.ERROR_PIPE_CONNECTED:
                         // IOCompletitionCallback will not be called because we completed synchronously.
                         completionSource.ReleaseResources();
                         if (State == PipeState.Connected)
@@ -286,7 +319,7 @@ namespace System.IO.Pipes
             }
 
             // If we are here then connection is pending.
-            completionSource.RegisterForCancellation();
+            completionSource.RegisterForCancellation(cancellationToken);
 
             return completionSource.Task;
         }

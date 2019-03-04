@@ -53,11 +53,11 @@ namespace System.Threading.Tasks.Tests.WaitAllAny
     {
         Exceptional = -2,
         Cancelled = -1,
-        VeryLight = 1000,     // the number is the N input to the ZetaSequence workload
-        Light = 10000,
-        Medium = 1000000,
-        Heavy = 100000000,
-        VeryHeavy = 1000000000,
+        VeryLight = 100,     // the number is the N input to the ZetaSequence workload
+        Light = 200,
+        Medium = 400,
+        Heavy = 800,
+        VeryHeavy = 1600,
     }
 
     public class TestParameters_WaitAllAny
@@ -322,7 +322,7 @@ namespace System.Threading.Tasks.Tests.WaitAllAny
         /// <summary>
         /// the scenario verification
         /// 
-        /// - all the tasks should be coplted in case of waitAll with -1 timeout
+        /// - all the tasks should be completed in case of waitAll with -1 timeout
         /// - the returned index form WaitAny should correspond to a completed task
         /// - in case of Cancelled  and Exception tests the right exceptions should be got for WaitAll
         /// </summary>
@@ -368,7 +368,7 @@ namespace System.Threading.Tasks.Tests.WaitAllAny
                     {
                         //waitAny will not fail if a number of tasks were exceptional
                         if (expCaught)
-                            Assert.True(false, string.Format("Unexcepted TPLTestException in Task at Index = {0} caught", i));
+                            Assert.True(false, string.Format("Unexpected TPLTestException in Task at Index = {0} caught", i));
 
                         //need to check it eventually to prevent it from crashing the finalizer
                         faultyTasks.Add(i, ti.Task);
@@ -387,7 +387,7 @@ namespace System.Threading.Tasks.Tests.WaitAllAny
                     else // must be API_WaitAllAny.WaitAny
                     {
                         if (expCaught) //waitAny will not fail if a number of tasks were cancelled
-                            Assert.False(expCaught, "Unexcepted TaskCanceledException in Task at Index = " + i + " caught");
+                            Assert.False(expCaught, "Unexpected TaskCanceledException in Task at Index = " + i + " caught");
                     }
                 }
                 else if (ti.Task.IsCompleted && !CheckResult(ti.Result))
@@ -409,7 +409,7 @@ namespace System.Threading.Tasks.Tests.WaitAllAny
                 foreach (var tasks in faultyTasks)
                 {
                     if (!(tasks.Value.Exception.InnerException is TPLTestException))
-                        Assert.True(false, string.Format("Unexcepted Exception in Task at Index = {0} caught", tasks.Key));
+                        Assert.True(false, string.Format("Unexpected Exception in Task at Index = {0} caught", tasks.Key));
                 }
             }
         }

@@ -113,9 +113,9 @@ namespace System.Threading.Tasks.Dataflow.Internal
             TargetCoreOptions targetCoreOptions)
         {
             // Validate internal arguments
-            Contract.Requires(owningTarget != null, "Core must be associated with a target block.");
-            Contract.Requires(dataflowBlockOptions != null, "Options must be provided to configure the core.");
-            Contract.Requires(callAction != null, "Action to invoke for each item is required.");
+            Debug.Assert(owningTarget != null, "Core must be associated with a target block.");
+            Debug.Assert(dataflowBlockOptions != null, "Options must be provided to configure the core.");
+            Debug.Assert(callAction != null, "Action to invoke for each item is required.");
 
             // Store arguments and do additional initialization
             _owningTarget = owningTarget;
@@ -142,7 +142,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         internal void Complete(Exception exception, bool dropPendingMessages, bool storeExceptionEvenIfAlreadyCompleting = false,
             bool unwrapInnerExceptions = false, bool revertProcessingState = false)
         {
-            Contract.Requires(storeExceptionEvenIfAlreadyCompleting || !revertProcessingState,
+            Debug.Assert(storeExceptionEvenIfAlreadyCompleting || !revertProcessingState,
                             "Indicating dirty processing state may only come with storeExceptionEvenIfAlreadyCompleting==true.");
             Contract.EndContractBlock();
 
@@ -155,8 +155,6 @@ namespace System.Threading.Tasks.Dataflow.Internal
                 {
                     Debug.Assert(_numberOfOutstandingOperations > 0 || !storeExceptionEvenIfAlreadyCompleting,
                                 "Calls with storeExceptionEvenIfAlreadyCompleting==true may only be coming from processing task.");
-
-#pragma warning disable 0420
                     Common.AddException(ref _exceptions, exception, unwrapInnerExceptions);
                 }
 
@@ -183,7 +181,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         }
 
         /// <include file='XmlDocs/CommonXmlDocComments.xml' path='CommonXmlDocComments/Targets/Member[@name="OfferMessage"]/*' />
-        internal DataflowMessageStatus OfferMessage(DataflowMessageHeader messageHeader, TInput messageValue, ISourceBlock<TInput> source, Boolean consumeToAccept)
+        internal DataflowMessageStatus OfferMessage(DataflowMessageHeader messageHeader, TInput messageValue, ISourceBlock<TInput> source, bool consumeToAccept)
         {
             // Validate arguments
             if (!messageHeader.IsValid) throw new ArgumentException(SR.Argument_InvalidMessageHeader, nameof(messageHeader));
@@ -298,9 +296,9 @@ namespace System.Threading.Tasks.Dataflow.Internal
         {
             get
             {
-                Contract.Requires(_numberOfOutstandingOperations >= 0, "Number of outstanding operations should never be negative.");
-                Contract.Requires(_numberOfOutstandingServiceTasks >= 0, "Number of outstanding service tasks should never be negative.");
-                Contract.Requires(_numberOfOutstandingOperations >= _numberOfOutstandingServiceTasks, "Number of outstanding service tasks should never exceed the number of outstanding operations.");
+                Debug.Assert(_numberOfOutstandingOperations >= 0, "Number of outstanding operations should never be negative.");
+                Debug.Assert(_numberOfOutstandingServiceTasks >= 0, "Number of outstanding service tasks should never be negative.");
+                Debug.Assert(_numberOfOutstandingOperations >= _numberOfOutstandingServiceTasks, "Number of outstanding service tasks should never exceed the number of outstanding operations.");
                 Common.ContractAssertMonitorStatus(IncomingLock, held: true);
 
                 // In async mode, we increment _numberOfOutstandingOperations before we start 
@@ -314,9 +312,9 @@ namespace System.Threading.Tasks.Dataflow.Internal
         {
             get
             {
-                Contract.Requires(_numberOfOutstandingOperations >= 0, "Number of outstanding operations should never be negative.");
-                Contract.Requires(_numberOfOutstandingServiceTasks >= 0, "Number of outstanding service tasks should never be negative.");
-                Contract.Requires(_numberOfOutstandingOperations >= _numberOfOutstandingServiceTasks, "Number of outstanding service tasks should never exceed the number of outstanding operations.");
+                Debug.Assert(_numberOfOutstandingOperations >= 0, "Number of outstanding operations should never be negative.");
+                Debug.Assert(_numberOfOutstandingServiceTasks >= 0, "Number of outstanding service tasks should never be negative.");
+                Debug.Assert(_numberOfOutstandingOperations >= _numberOfOutstandingServiceTasks, "Number of outstanding service tasks should never exceed the number of outstanding operations.");
                 Common.ContractAssertMonitorStatus(IncomingLock, held: true);
 
                 if (!UsesAsyncCompletion)
@@ -358,7 +356,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope")]
         private void ProcessAsyncIfNecessary_Slow(bool repeat)
         {
-            Contract.Requires(HasRoomForMoreServiceTasks, "There must be room to process asynchronously.");
+            Debug.Assert(HasRoomForMoreServiceTasks, "There must be room to process asynchronously.");
             Common.ContractAssertMonitorStatus(IncomingLock, held: true);
 
             // Determine preconditions to launching a processing task
@@ -531,7 +529,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         private bool TryGetNextMessageForNewAsyncOperation(out KeyValuePair<TInput, long> messageWithId)
         {
-            Contract.Requires(UsesAsyncCompletion, "Only valid to use when in async mode.");
+            Debug.Assert(UsesAsyncCompletion, "Only valid to use when in async mode.");
             Common.ContractAssertMonitorStatus(IncomingLock, held: false);
 
             bool parallelismAvailable;
@@ -623,7 +621,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
             bool forPostponementTransfer,
             out KeyValuePair<TInput, long> result)
         {
-            Contract.Requires(
+            Debug.Assert(
                 _dataflowBlockOptions.BoundedCapacity !=
                 System.Threading.Tasks.Dataflow.DataflowBlockOptions.Unbounded, "Only valid to use when in bounded mode.");
             Common.ContractAssertMonitorStatus(IncomingLock, held: false);
@@ -681,7 +679,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
                 {
                     if (forPostponementTransfer)
                     {
-                        // We didn't consume message so we need to decrement because we havent consumed the element.
+                        // We didn't consume message so we need to decrement because we haven't consumed the element.
                         _boundingState.OutstandingTransfers--;
                     }
                 }
@@ -728,7 +726,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         /// </summary>
         private void CompleteBlockIfPossible_Slow()
         {
-            Contract.Requires((_decliningPermanently && _messages.IsEmpty) || CanceledOrFaulted, "There must be no more messages.");
+            Debug.Assert((_decliningPermanently && _messages.IsEmpty) || CanceledOrFaulted, "There must be no more messages.");
             Common.ContractAssertMonitorStatus(IncomingLock, held: true);
 
             bool notCurrentlyProcessing = _numberOfOutstandingOperations == 0;
@@ -811,7 +809,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         /// <param name="count">The incremental addition (positive to increase, negative to decrease).</param>
         internal void ChangeBoundingCount(int count)
         {
-            Contract.Requires(count != 0, "Should only be called when the count is actually changing.");
+            Debug.Assert(count != 0, "Should only be called when the count is actually changing.");
             Common.ContractAssertMonitorStatus(IncomingLock, held: false);
             if (_boundingState != null)
             {
@@ -867,7 +865,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
             }
 
             /// <summary>Gets the current number of outstanding input processing operations.</summary>
-            internal Int32 CurrentDegreeOfParallelism { get { return _target._numberOfOutstandingOperations - _target._numberOfOutstandingServiceTasks; } }
+            internal int CurrentDegreeOfParallelism { get { return _target._numberOfOutstandingOperations - _target._numberOfOutstandingServiceTasks; } }
 
             /// <summary>Gets the DataflowBlockOptions used to configure this block.</summary>
             internal ExecutionDataflowBlockOptions DataflowBlockOptions { get { return _target._dataflowBlockOptions; } }

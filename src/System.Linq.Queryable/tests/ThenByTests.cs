@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using Xunit;
@@ -38,28 +37,28 @@ namespace System.Linq.Tests.LegacyTests
         public void NullSource()
         {
             IOrderedQueryable<int> source = null;
-            Assert.Throws<ArgumentNullException>("source", () => source.ThenBy(i => i));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => source.ThenBy(i => i));
         }
 
         [Fact]
         public void NullKeySelector()
         {
             Expression<Func<DateTime, int>> keySelector = null;
-            Assert.Throws<ArgumentNullException>("keySelector", () => Enumerable.Empty<DateTime>().AsQueryable().OrderBy(e => e).ThenBy(keySelector));
+            AssertExtensions.Throws<ArgumentNullException>("keySelector", () => Enumerable.Empty<DateTime>().AsQueryable().OrderBy(e => e).ThenBy(keySelector));
         }
 
         [Fact]
         public void NullSourceComparer()
         {
             IOrderedQueryable<int> source = null;
-            Assert.Throws<ArgumentNullException>("source", () => source.ThenBy(i => i, null));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => source.ThenBy(i => i, null));
         }
 
         [Fact]
         public void NullKeySelectorComparer()
         {
             Expression<Func<DateTime, int>> keySelector = null;
-            Assert.Throws<ArgumentNullException>("keySelector", () => Enumerable.Empty<DateTime>().AsQueryable().OrderBy(e => e).ThenBy(keySelector, null));
+            AssertExtensions.Throws<ArgumentNullException>("keySelector", () => Enumerable.Empty<DateTime>().AsQueryable().OrderBy(e => e).ThenBy(keySelector, null));
         }
 
         [Fact]

@@ -8,9 +8,9 @@ using Xunit;
 
 namespace System.IO.Compression.Tests
 {
-    public class zip_InvalidParametersAndStrangeFiles
+    public class zip_InvalidParametersAndStrangeFiles : ZipFileTestBase
     {
-        private static void ConstructorThrows<TException>(Func<ZipArchive> constructor, String Message) where TException : Exception
+        private static void ConstructorThrows<TException>(Func<ZipArchive> constructor, string Message) where TException : Exception
         {
             try
             {
@@ -29,7 +29,7 @@ namespace System.IO.Compression.Tests
         [Fact]
         public static async Task InvalidInstanceMethods()
         {
-            Stream zipFile = await StreamHelpers.CreateTempCopyStream(ZipTest.zfile("normal.zip"));
+            Stream zipFile = await StreamHelpers.CreateTempCopyStream(zfile("normal.zip"));
             using (ZipArchive archive = new ZipArchive(zipFile, ZipArchiveMode.Update))
             {
                 //non-existent entry
@@ -40,7 +40,7 @@ namespace System.IO.Compression.Tests
                 ZipArchiveEntry entry = archive.GetEntry("first.txt");
 
                 //null/empty string
-                Assert.Throws<ArgumentException>(() => archive.CreateEntry("")); //"Should throw on empty entry name"
+                AssertExtensions.Throws<ArgumentException>("entryName", () => archive.CreateEntry("")); //"Should throw on empty entry name"
                 Assert.Throws<ArgumentNullException>(() => archive.CreateEntry(null)); //"should throw on null entry name"
             }
         }
@@ -96,12 +96,12 @@ namespace System.IO.Compression.Tests
         [Theory]
         [InlineData("LZMA.zip")]
         [InlineData("invalidDeflate.zip")]
-        public static async Task ZipArchiveEntry_InvalidUpdate(String zipname)
+        public static async Task ZipArchiveEntry_InvalidUpdate(string zipname)
         {
-            string filename = ZipTest.bad(zipname);
+            string filename = bad(zipname);
             Stream updatedCopy = await StreamHelpers.CreateTempCopyStream(filename);
-            String name;
-            Int64 length, compressedLength;
+            string name;
+            long length, compressedLength;
             DateTimeOffset lastWriteTime;
             using (ZipArchive archive = new ZipArchive(updatedCopy, ZipArchiveMode.Update, true))
             {
@@ -128,9 +128,9 @@ namespace System.IO.Compression.Tests
         [Theory]
         [InlineData("CDoffsetOutOfBounds.zip")]
         [InlineData("EOCDmissing.zip")]
-        public static async Task ZipArchive_InvalidStream(String zipname)
+        public static async Task ZipArchive_InvalidStream(string zipname)
         {
-            string filename = ZipTest.bad(zipname);
+            string filename = bad(zipname);
             using (var stream = await StreamHelpers.CreateTempCopyStream(filename))
                 Assert.Throws<InvalidDataException>(() => new ZipArchive(stream, ZipArchiveMode.Read));
         }
@@ -138,9 +138,9 @@ namespace System.IO.Compression.Tests
         [Theory]
         [InlineData("CDoffsetInBoundsWrong.zip")]
         [InlineData("numberOfEntriesDifferent.zip")]
-        public static async Task ZipArchive_InvalidEntryTable(String zipname)
+        public static async Task ZipArchive_InvalidEntryTable(string zipname)
         {
-            string filename = ZipTest.bad(zipname);
+            string filename = bad(zipname);
             using (ZipArchive archive = new ZipArchive(await StreamHelpers.CreateTempCopyStream(filename), ZipArchiveMode.Read))
                 Assert.Throws<InvalidDataException>(() => archive.Entries[0]);
         }
@@ -151,9 +151,9 @@ namespace System.IO.Compression.Tests
         [InlineData("localFileOffsetOutOfBounds.zip", true)]
         [InlineData("LZMA.zip", true)]
         [InlineData("invalidDeflate.zip", false)]
-        public static async Task ZipArchive_InvalidEntry(String zipname, Boolean throwsOnOpen)
+        public static async Task ZipArchive_InvalidEntry(string zipname, bool throwsOnOpen)
         {
-            string filename = ZipTest.bad(zipname);
+            string filename = bad(zipname);
             using (ZipArchive archive = new ZipArchive(await StreamHelpers.CreateTempCopyStream(filename), ZipArchiveMode.Read))
             {
                 ZipArchiveEntry e = archive.Entries[0];
@@ -175,7 +175,7 @@ namespace System.IO.Compression.Tests
         public static async Task ZipArchiveEntry_InvalidLastWriteTime_Read()
         {
             using (ZipArchive archive = new ZipArchive(await StreamHelpers.CreateTempCopyStream(
-                 ZipTest.bad("invaliddate.zip")), ZipArchiveMode.Read))
+                 bad("invaliddate.zip")), ZipArchiveMode.Read))
             {
                 Assert.Equal(new DateTime(1980, 1, 1, 0, 0, 0), archive.Entries[0].LastWriteTime.DateTime); //"Date isn't correct on invalid date"
             }
@@ -191,7 +191,7 @@ namespace System.IO.Compression.Tests
                 {
                     //"should throw on bad date"
                     entry.LastWriteTime = new DateTimeOffset(1979, 12, 3, 5, 6, 2, new TimeSpan());
-                }); 
+                });
                 Assert.Throws<ArgumentOutOfRangeException>(() =>
                 {
                     //"Should throw on bad date"
@@ -201,14 +201,45 @@ namespace System.IO.Compression.Tests
         }
 
         [Theory]
-        [InlineData("extradata/extraDataLHandCDentryAndArchiveComments.zip", "verysmall", false)]
-        [InlineData("extradata/extraDataThenZip64.zip", "verysmall", false)]
-        [InlineData("extradata/zip64ThenExtraData.zip", "verysmall", false)]
-        [InlineData("dataDescriptor.zip", "normalWithoutBinary", true)]
-        [InlineData("filenameTimeAndSizesDifferentInLH.zip", "verysmall", true)]
-        public static async Task StrangeFiles(string zipFile, string zipFolder, bool dontRequireExplicit)
+        [InlineData("extradata/extraDataLHandCDentryAndArchiveComments.zip", "verysmall", true)]
+        [InlineData("extradata/extraDataThenZip64.zip", "verysmall", true)]
+        [InlineData("extradata/zip64ThenExtraData.zip", "verysmall", true)]
+        [InlineData("dataDescriptor.zip", "normalWithoutBinary", false)]
+        [InlineData("filenameTimeAndSizesDifferentInLH.zip", "verysmall", false)]
+        public static async Task StrangeFiles(string zipFile, string zipFolder, bool requireExplicit)
         {
-            ZipTest.IsZipSameAsDir(await StreamHelpers.CreateTempCopyStream(ZipTest.strange(zipFile)), ZipTest.zfolder(zipFolder), ZipArchiveMode.Update, dontRequireExplicit, dontCheckTimes: false);
+            IsZipSameAsDir(await StreamHelpers.CreateTempCopyStream(strange(zipFile)), zfolder(zipFolder), ZipArchiveMode.Update, requireExplicit, checkTimes: true);
+        }
+
+        /// <summary>
+        /// This test tiptoes the buffer boundaries to ensure that the size of a read buffer doesn't
+        /// cause any bytes to be left in ZLib's buffer.
+        /// </summary>
+        [Fact]
+        public static void ZipWithLargeSparseFile()
+        {
+            string zipname = strange("largetrailingwhitespacedeflation.zip");
+            string entryname = "A/B/C/D";
+            using (FileStream stream = File.Open(zipname, FileMode.Open, FileAccess.Read))
+            using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Read))
+            {
+                ZipArchiveEntry entry = archive.GetEntry(entryname);
+                long size = entry.Length;
+
+                for (int bufferSize = 1; bufferSize <= size; bufferSize++)
+                {
+                    using (Stream entryStream = entry.Open())
+                    {
+                        byte[] b = new byte[bufferSize];
+                        int read = 0, count = 0;
+                        while ((read = entryStream.Read(b, 0, bufferSize)) > 0)
+                        {
+                            count += read;
+                        }
+                        Assert.Equal(size, count);
+                    }
+                }
+            }
         }
     }
 }

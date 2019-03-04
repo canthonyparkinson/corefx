@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
 using Xunit;
 
@@ -44,7 +43,7 @@ namespace System.Linq.Tests
             IQueryable<string> first = null;
             string[] second = { "bBo", "shriC" };
 
-            Assert.Throws<ArgumentNullException>("source1", () => first.Except(second.AsQueryable(), new AnagramEqualityComparer()));
+            AssertExtensions.Throws<ArgumentNullException>("source1", () => first.Except(second.AsQueryable(), new AnagramEqualityComparer()));
         }
 
         [Fact]
@@ -53,7 +52,7 @@ namespace System.Linq.Tests
             string[] first = { "Bob", "Tim", "Robert", "Chris" };
             IQueryable<string> second = null;
 
-            Assert.Throws<ArgumentNullException>("source2", () => first.AsQueryable().Except(second, new AnagramEqualityComparer()));
+            AssertExtensions.Throws<ArgumentNullException>("source2", () => first.AsQueryable().Except(second, new AnagramEqualityComparer()));
         }
 
         [Fact]
@@ -62,7 +61,7 @@ namespace System.Linq.Tests
             IQueryable<string> first = null;
             string[] second = { "bBo", "shriC" };
 
-            Assert.Throws<ArgumentNullException>("source1", () => first.Except(second.AsQueryable()));
+            AssertExtensions.Throws<ArgumentNullException>("source1", () => first.Except(second.AsQueryable()));
         }
 
         [Fact]
@@ -71,7 +70,7 @@ namespace System.Linq.Tests
             string[] first = { "Bob", "Tim", "Robert", "Chris" };
             IQueryable<string> second = null;
 
-            Assert.Throws<ArgumentNullException>("source2", () => first.AsQueryable().Except(second));
+            AssertExtensions.Throws<ArgumentNullException>("source2", () => first.AsQueryable().Except(second));
         }
 
         [Fact]

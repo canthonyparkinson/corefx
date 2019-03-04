@@ -8,26 +8,33 @@ namespace System.Common.Tests
 {
     public sealed class ThreadCultureChange : IDisposable
     {
-        private CultureInfo _originalDefaultCultureInfo;
-        private CultureInfo _originalDefaultUICultureInfo;
+        private readonly CultureInfo _originalCultureInfo = CultureInfo.CurrentCulture;
+        private readonly CultureInfo _originalUICultureInfo = CultureInfo.CurrentUICulture;
 
-        public ThreadCultureChange()
+        public ThreadCultureChange() { }
+
+        public ThreadCultureChange(string culture) : this()
         {
-            _originalDefaultCultureInfo = CultureInfo.DefaultThreadCurrentCulture;
-            _originalDefaultUICultureInfo = CultureInfo.DefaultThreadCurrentUICulture;
+            ChangeCultureInfo(culture);
         }
 
-        public void ChangeCultureInfo(string culture)
+        public ThreadCultureChange(CultureInfo newCulture) : this()
         {
-            CultureInfo newCulture = new CultureInfo(culture);
-            CultureInfo.DefaultThreadCurrentCulture = newCulture;
-            CultureInfo.DefaultThreadCurrentUICulture = newCulture;
+            ChangeCultureInfo(newCulture);
+        }
+
+        public void ChangeCultureInfo(string culture) => ChangeCultureInfo(new CultureInfo(culture));
+
+        public void ChangeCultureInfo(CultureInfo newCulture)
+        {
+            CultureInfo.CurrentCulture = newCulture;
+            CultureInfo.CurrentUICulture = newCulture;
         }
 
         public void Dispose()
         {
-            CultureInfo.DefaultThreadCurrentCulture = _originalDefaultCultureInfo;
-            CultureInfo.DefaultThreadCurrentUICulture = _originalDefaultUICultureInfo;
+            CultureInfo.CurrentCulture = _originalCultureInfo;
+            CultureInfo.CurrentUICulture = _originalUICultureInfo;
         }
     }
 }

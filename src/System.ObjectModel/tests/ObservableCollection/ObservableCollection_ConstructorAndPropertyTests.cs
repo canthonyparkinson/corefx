@@ -5,6 +5,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using Xunit;
 
 namespace System.Collections.ObjectModel.Tests
@@ -12,7 +13,7 @@ namespace System.Collections.ObjectModel.Tests
     /// <summary>
     /// Tests the public properties and constructor in ObservableCollection<T>.
     /// </summary>
-    public class ConstructorAndPropertyTests
+    public partial class ConstructorAndPropertyTests
     {
         /// <summary>
         /// Tests that the parameterless constructor works.
@@ -34,6 +35,15 @@ namespace System.Collections.ObjectModel.Tests
         {
             var actual = new ObservableCollection<string>(collection);
             Assert.Equal(collection, actual);
+        }
+
+        [Theory]
+        [MemberData(nameof(Collections))]
+        public static void IEnumerableConstructorTest_MakesCopy(IEnumerable<string> collection)
+        {
+            var oc = new ObservableCollectionSubclass<string>(collection);
+            Assert.NotNull(oc.InnerList);
+            Assert.NotSame(collection, oc.InnerList);
         }
 
         public static readonly object[][] Collections =
@@ -69,7 +79,7 @@ namespace System.Collections.ObjectModel.Tests
         [Fact]
         public static void IEnumerableConstructorTest_Negative()
         {
-            Assert.Throws<ArgumentNullException>("collection", () => new ObservableCollection<string>(null));
+            AssertExtensions.Throws<ArgumentNullException>("collection", () => new ObservableCollection<string>((IEnumerable<string>)null));
         }
 
         /// <summary>
@@ -97,7 +107,7 @@ namespace System.Collections.ObjectModel.Tests
         public static void ItemTestSet_Negative_InvalidIndex(int size, int index)
         {
             var col = new ObservableCollection<int>(new int[size]);
-            Assert.Throws<ArgumentOutOfRangeException>(() => col[index]);
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => col[index]);
         }
 
         // ICollection<T>.IsReadOnly
@@ -109,10 +119,63 @@ namespace System.Collections.ObjectModel.Tests
         }
 
         [Fact]
+        // skip the test on desktop as "new ObservableCollection<int>()" returns 0 length collection
+        // skip the test on UapAot as the requires Reflection on internal framework types.
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework | TargetFrameworkMonikers.UapAot)]
         public static void DebuggerAttributeTests()
         {
-            DebuggerAttributes.ValidateDebuggerDisplayReferences(new ObservableCollection<int>());
-            DebuggerAttributes.ValidateDebuggerTypeProxyProperties(new ObservableCollection<int>());
+            ObservableCollection<int> col = new ObservableCollection<int>(new[] {1, 2, 3, 4});
+            DebuggerAttributes.ValidateDebuggerDisplayReferences(col);
+            DebuggerAttributeInfo info = DebuggerAttributes.ValidateDebuggerTypeProxyProperties(col);
+            PropertyInfo itemProperty = info.Properties.Single(pr => pr.GetCustomAttribute<DebuggerBrowsableAttribute>().State == DebuggerBrowsableState.RootHidden);
+            int[] items = itemProperty.GetValue(info.Instance) as int[];
+            Assert.Equal(col, items);
+        }
+
+        [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework | TargetFrameworkMonikers.UapAot, "Cannot do DebuggerAttribute testing on UapAot: requires internal Reflection on framework types.")]
+        public static void DebuggerAttribute_NullCollection_ThrowsArgumentNullException()
+        {
+            TargetInvocationException ex = Assert.Throws<TargetInvocationException>(() => DebuggerAttributes.ValidateDebuggerTypeProxyProperties(typeof(ObservableCollection<int>), null));
+            ArgumentNullException argumentNullException = Assert.IsType<ArgumentNullException>(ex.InnerException);
+        }
+
+        private partial class ObservableCollectionSubclass<T> : ObservableCollection<T>
+        {
+            public ObservableCollectionSubclass(IEnumerable<T> collection) : base(collection) { }
+
+            public List<T> InnerList => (List<T>)base.Items;
+        }
+
+        /// <summary>
+        /// Tests that ArgumentNullException is thrown when given a null IEnumerable.
+        /// </summary>
+        [Fact]
+        public static void ListConstructorTest_Negative()
+        {
+            AssertExtensions.Throws<ArgumentNullException>("list", () => new ObservableCollection<string>((List<string>)null));
+        }
+
+        [Fact]
+        public static void ListConstructorTest()
+        {
+            List<string> collection = new List<string> { "one", "two", "three" };
+            var actual = new ObservableCollection<string>(collection);
+            Assert.Equal(collection, actual);
+        }
+
+        [Fact]
+        public static void ListConstructorTest_MakesCopy()
+        {
+            List<string> collection = new List<string> { "one", "two", "three" };
+            var oc = new ObservableCollectionSubclass<string>(collection);
+            Assert.NotNull(oc.InnerList);
+            Assert.NotSame(collection, oc.InnerList);
+        }
+
+        private partial class ObservableCollectionSubclass<T> : ObservableCollection<T>
+        {
+            public ObservableCollectionSubclass(List<T> list) : base(list) { }
         }
     }
 }

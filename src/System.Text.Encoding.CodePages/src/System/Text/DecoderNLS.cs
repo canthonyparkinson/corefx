@@ -5,7 +5,7 @@
 using System.Text;
 using System;
 using System.Globalization;
-using System.Diagnostics.Contracts;
+using System.Runtime.Serialization;
 
 namespace System.Text
 {
@@ -20,8 +20,7 @@ namespace System.Text
     // class are typically obtained through calls to the GetDecoder method
     // of Encoding objects.
     //
-
-    internal class DecoderNLS : Decoder
+    internal class DecoderNLS : Decoder, ISerializable
     {
         // Remember our encoding
         protected EncodingNLS m_encoding;
@@ -43,6 +42,11 @@ namespace System.Text
         {
             m_encoding = null;
             Reset();
+        }
+
+        void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            throw new PlatformNotSupportedException();
         }
 
         internal new DecoderFallback Fallback
@@ -85,7 +89,6 @@ namespace System.Text
             return GetCharCount(bytes, index, count, false);
         }
 
-        [System.Security.SecuritySafeCritical]  // auto-generated
         public override unsafe int GetCharCount(byte[] bytes, int index, int count, bool flush)
         {
             // Validate Parameters
@@ -93,24 +96,21 @@ namespace System.Text
                 throw new ArgumentNullException(nameof(bytes), SR.ArgumentNull_Array);
 
             if (index < 0 || count < 0)
-                throw new ArgumentOutOfRangeException((index < 0 ? "index" : "count"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((index < 0 ? nameof(index): nameof(count)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (bytes.Length - index < count)
                 throw new ArgumentOutOfRangeException(nameof(bytes), SR.ArgumentOutOfRange_IndexCountBuffer);
-
-            Contract.EndContractBlock();
 
             // Avoid null fixed problem
             if (bytes.Length == 0)
                 bytes = new byte[1];
 
             // Just call pointer version
-            fixed (byte* pBytes = bytes)
+            fixed (byte* pBytes = &bytes[0])
                 return GetCharCount(pBytes + index, count, flush);
         }
 
-        [System.Security.SecurityCritical]  // auto-generated
-        public unsafe int GetCharCount(byte* bytes, int count, bool flush)
+        public override unsafe int GetCharCount(byte* bytes, int count, bool flush)
         {
             // Validate parameters
             if (bytes == null)
@@ -118,7 +118,6 @@ namespace System.Text
 
             if (count < 0)
                 throw new ArgumentOutOfRangeException(nameof(count), SR.ArgumentOutOfRange_NeedNonNegNum);
-            Contract.EndContractBlock();
 
             // Remember the flush
             m_mustFlush = flush;
@@ -134,24 +133,21 @@ namespace System.Text
             return GetChars(bytes, byteIndex, byteCount, chars, charIndex, false);
         }
 
-        [System.Security.SecuritySafeCritical]  // auto-generated
         public override unsafe int GetChars(byte[] bytes, int byteIndex, int byteCount,
                                              char[] chars, int charIndex, bool flush)
         {
             // Validate Parameters
             if (bytes == null || chars == null)
-                throw new ArgumentNullException(bytes == null ? "bytes" : "chars", SR.ArgumentNull_Array);
+                throw new ArgumentNullException(bytes == null ? nameof(bytes): nameof(chars), SR.ArgumentNull_Array);
 
             if (byteIndex < 0 || byteCount < 0)
-                throw new ArgumentOutOfRangeException((byteIndex < 0 ? "byteIndex" : "byteCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((byteIndex < 0 ? nameof(byteIndex): nameof(byteCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (bytes.Length - byteIndex < byteCount)
                 throw new ArgumentOutOfRangeException(nameof(bytes), SR.ArgumentOutOfRange_IndexCountBuffer);
 
             if (charIndex < 0 || charIndex > chars.Length)
                 throw new ArgumentOutOfRangeException(nameof(charIndex), SR.ArgumentOutOfRange_Index);
-
-            Contract.EndContractBlock();
 
             // Avoid empty input fixed problem
             if (bytes.Length == 0)
@@ -162,24 +158,22 @@ namespace System.Text
                 chars = new char[1];
 
             // Just call pointer version
-            fixed (byte* pBytes = bytes)
-                fixed (char* pChars = chars)
+            fixed (byte* pBytes = &bytes[0])
+                fixed (char* pChars = &chars[0])
                     // Remember that charCount is # to decode, not size of array
                     return GetChars(pBytes + byteIndex, byteCount,
                                     pChars + charIndex, charCount, flush);
         }
 
-        [System.Security.SecurityCritical]  // auto-generated
-        public unsafe int GetChars(byte* bytes, int byteCount,
+        public override unsafe int GetChars(byte* bytes, int byteCount,
                                               char* chars, int charCount, bool flush)
         {
             // Validate parameters
             if (chars == null || bytes == null)
-                throw new ArgumentNullException((chars == null ? "chars" : "bytes"), SR.ArgumentNull_Array);
+                throw new ArgumentNullException((chars == null ? nameof(chars): nameof(bytes)), SR.ArgumentNull_Array);
 
             if (byteCount < 0 || charCount < 0)
-                throw new ArgumentOutOfRangeException((byteCount < 0 ? "byteCount" : "charCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
-            Contract.EndContractBlock();
+                throw new ArgumentOutOfRangeException((byteCount < 0 ? nameof(byteCount): nameof(charCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             // Remember our flush
             m_mustFlush = flush;
@@ -191,28 +185,25 @@ namespace System.Text
 
         // This method is used when the output buffer might not be big enough.
         // Just call the pointer version.  (This gets chars)
-        [System.Security.SecuritySafeCritical]  // auto-generated
         public override unsafe void Convert(byte[] bytes, int byteIndex, int byteCount,
                                               char[] chars, int charIndex, int charCount, bool flush,
                                               out int bytesUsed, out int charsUsed, out bool completed)
         {
             // Validate parameters
             if (bytes == null || chars == null)
-                throw new ArgumentNullException((bytes == null ? "bytes" : "chars"), SR.ArgumentNull_Array);
+                throw new ArgumentNullException((bytes == null ? nameof(bytes): nameof(chars)), SR.ArgumentNull_Array);
 
             if (byteIndex < 0 || byteCount < 0)
-                throw new ArgumentOutOfRangeException((byteIndex < 0 ? "byteIndex" : "byteCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((byteIndex < 0 ? nameof(byteIndex): nameof(byteCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (charIndex < 0 || charCount < 0)
-                throw new ArgumentOutOfRangeException((charIndex < 0 ? "charIndex" : "charCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
+                throw new ArgumentOutOfRangeException((charIndex < 0 ? nameof(charIndex): nameof(charCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             if (bytes.Length - byteIndex < byteCount)
                 throw new ArgumentOutOfRangeException(nameof(bytes), SR.ArgumentOutOfRange_IndexCountBuffer);
 
             if (chars.Length - charIndex < charCount)
                 throw new ArgumentOutOfRangeException(nameof(chars), SR.ArgumentOutOfRange_IndexCountBuffer);
-
-            Contract.EndContractBlock();
 
             // Avoid empty input problem
             if (bytes.Length == 0)
@@ -221,9 +212,9 @@ namespace System.Text
                 chars = new char[1];
 
             // Just call the pointer version (public overrides can't do this)
-            fixed (byte* pBytes = bytes)
+            fixed (byte* pBytes = &bytes[0])
             {
-                fixed (char* pChars = chars)
+                fixed (char* pChars = &chars[0])
                 {
                     Convert(pBytes + byteIndex, byteCount, pChars + charIndex, charCount, flush,
                         out bytesUsed, out charsUsed, out completed);
@@ -233,18 +224,16 @@ namespace System.Text
 
         // This is the version that used pointers.  We call the base encoding worker function
         // after setting our appropriate internal variables.  This is getting chars
-        [System.Security.SecurityCritical]  // auto-generated
-        public unsafe void Convert(byte* bytes, int byteCount,
+        public override unsafe void Convert(byte* bytes, int byteCount,
                                               char* chars, int charCount, bool flush,
                                               out int bytesUsed, out int charsUsed, out bool completed)
         {
             // Validate input parameters
             if (chars == null || bytes == null)
-                throw new ArgumentNullException(chars == null ? "chars" : "bytes", SR.ArgumentNull_Array);
+                throw new ArgumentNullException(chars == null ? nameof(chars): nameof(bytes), SR.ArgumentNull_Array);
 
             if (byteCount < 0 || charCount < 0)
-                throw new ArgumentOutOfRangeException((byteCount < 0 ? "byteCount" : "charCount"), SR.ArgumentOutOfRange_NeedNonNegNum);
-            Contract.EndContractBlock();
+                throw new ArgumentOutOfRangeException((byteCount < 0 ? nameof(byteCount): nameof(charCount)), SR.ArgumentOutOfRange_NeedNonNegNum);
 
             // We don't want to throw
             m_mustFlush = flush;

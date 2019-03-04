@@ -10,80 +10,101 @@ namespace System.Linq
     {
         public static TSource Last<TSource>(this IEnumerable<TSource> source)
         {
-            if (source == null)
+            TSource last = source.TryGetLast(out bool found);
+            if (!found)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowNoElementsException();
             }
 
-            IPartition<TSource> partition = source as IPartition<TSource>;
-            if (partition != null)
-            {
-                bool found;
-                TSource last = partition.TryGetLast(out found);
-                if (found)
-                {
-                    return last;
-                }
-            }
-            else
-            {
-                IList<TSource> list = source as IList<TSource>;
-                if (list != null)
-                {
-                    int count = list.Count;
-                    if (count > 0)
-                    {
-                        return list[count - 1];
-                    }
-                }
-                else
-                {
-                    using (IEnumerator<TSource> e = source.GetEnumerator())
-                    {
-                        if (e.MoveNext())
-                        {
-                            TSource result;
-                            do
-                            {
-                                result = e.Current;
-                            }
-                            while (e.MoveNext());
-
-                            return result;
-                        }
-                    }
-                }
-            }
-
-            throw Error.NoElements();
+            return last;
         }
 
         public static TSource Last<TSource>(this IEnumerable<TSource> source, Func<TSource, bool> predicate)
         {
+            TSource last = source.TryGetLast(predicate, out bool found);
+            if (!found)
+            {
+                ThrowHelper.ThrowNoMatchException();
+            }
+
+            return last;
+        }
+
+        public static TSource LastOrDefault<TSource>(this IEnumerable<TSource> source) =>
+            source.TryGetLast(out bool _);
+
+        public static TSource LastOrDefault<TSource>(this IEnumerable<TSource> source, Func<TSource, bool> predicate) =>
+            source.TryGetLast(predicate, out bool _);
+
+        private static TSource TryGetLast<TSource>(this IEnumerable<TSource> source, out bool found)
+        {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
+            }
+
+            if (source is IPartition<TSource> partition)
+            {
+                return partition.TryGetLast(out found);
+            }
+
+            if (source is IList<TSource> list)
+            {
+                int count = list.Count;
+                if (count > 0)
+                {
+                    found = true;
+                    return list[count - 1];
+                }
+            }
+            else
+            {
+                using (IEnumerator<TSource> e = source.GetEnumerator())
+                {
+                    if (e.MoveNext())
+                    {
+                        TSource result;
+                        do
+                        {
+                            result = e.Current;
+                        }
+                        while (e.MoveNext());
+
+                        found = true;
+                        return result;
+                    }
+                }
+            }
+
+            found = false;
+            return default(TSource);
+        }
+
+        private static TSource TryGetLast<TSource>(this IEnumerable<TSource> source, Func<TSource, bool> predicate, out bool found)
+        {
+            if (source == null)
+            {
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
             if (predicate == null)
             {
-                throw Error.ArgumentNull(nameof(predicate));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.predicate);
             }
 
-            OrderedEnumerable<TSource> ordered = source as OrderedEnumerable<TSource>;
-            if (ordered != null)
+            if (source is OrderedEnumerable<TSource> ordered)
             {
-                return ordered.Last(predicate);
+                return ordered.TryGetLast(predicate, out found);
             }
 
-            IList<TSource> list = source as IList<TSource>;
-            if (list != null)
+            if (source is IList<TSource> list)
             {
                 for (int i = list.Count - 1; i >= 0; --i)
                 {
                     TSource result = list[i];
                     if (predicate(result))
                     {
+                        found = true;
                         return result;
                     }
                 }
@@ -106,104 +127,15 @@ namespace System.Linq
                                 }
                             }
 
+                            found = true;
                             return result;
                         }
                     }
                 }
             }
 
-            throw Error.NoMatch();
-        }
-
-        public static TSource LastOrDefault<TSource>(this IEnumerable<TSource> source)
-        {
-            if (source == null)
-            {
-                throw Error.ArgumentNull(nameof(source));
-            }
-
-            IPartition<TSource> partition = source as IPartition<TSource>;
-            if (partition != null)
-            {
-                bool found;
-                return partition.TryGetLast(out found);
-            }
-
-            IList<TSource> list = source as IList<TSource>;
-            if (list != null)
-            {
-                int count = list.Count;
-                if (count > 0)
-                {
-                    return list[count - 1];
-                }
-            }
-            else
-            {
-                using (IEnumerator<TSource> e = source.GetEnumerator())
-                {
-                    if (e.MoveNext())
-                    {
-                        TSource result;
-                        do
-                        {
-                            result = e.Current;
-                        }
-                        while (e.MoveNext());
-
-                        return result;
-                    }
-                }
-            }
-
+            found = false;
             return default(TSource);
-        }
-
-        public static TSource LastOrDefault<TSource>(this IEnumerable<TSource> source, Func<TSource, bool> predicate)
-        {
-            if (source == null)
-            {
-                throw Error.ArgumentNull(nameof(source));
-            }
-
-            if (predicate == null)
-            {
-                throw Error.ArgumentNull(nameof(predicate));
-            }
-
-            OrderedEnumerable<TSource> ordered = source as OrderedEnumerable<TSource>;
-            if (ordered != null)
-            {
-                return ordered.LastOrDefault(predicate);
-            }
-
-            IList<TSource> list = source as IList<TSource>;
-            if (list != null)
-            {
-                for (int i = list.Count - 1; i >= 0; --i)
-                {
-                    TSource element = list[i];
-                    if (predicate(element))
-                    {
-                        return element;
-                    }
-                }
-
-                return default(TSource);
-            }
-            else
-            {
-                TSource result = default(TSource);
-                foreach (TSource element in source)
-                {
-                    if (predicate(element))
-                    {
-                        result = element;
-                    }
-                }
-
-                return result;
-            }
         }
     }
 }

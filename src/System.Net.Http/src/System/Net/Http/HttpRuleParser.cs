@@ -13,26 +13,6 @@ namespace System.Net.Http
     {
         private static readonly bool[] s_tokenChars = CreateTokenChars();
         private const int maxNestedCount = 5;
-        private static readonly string[] s_dateFormats = new string[] {
-            // "r", // RFC 1123, required output format but too strict for input
-            "ddd, d MMM yyyy H:m:s 'GMT'", // RFC 1123 (r, except it allows both 1 and 01 for date and time)
-            "ddd, d MMM yyyy H:m:s", // RFC 1123, no zone - assume GMT
-            "d MMM yyyy H:m:s 'GMT'", // RFC 1123, no day-of-week
-            "d MMM yyyy H:m:s", // RFC 1123, no day-of-week, no zone
-            "ddd, d MMM yy H:m:s 'GMT'", // RFC 1123, short year
-            "ddd, d MMM yy H:m:s", // RFC 1123, short year, no zone
-            "d MMM yy H:m:s 'GMT'", // RFC 1123, no day-of-week, short year
-            "d MMM yy H:m:s", // RFC 1123, no day-of-week, short year, no zone
-
-            "dddd, d'-'MMM'-'yy H:m:s 'GMT'", // RFC 850
-            "dddd, d'-'MMM'-'yy H:m:s", // RFC 850 no zone
-            "ddd MMM d H:m:s yyyy", // ANSI C's asctime() format
-
-            "ddd, d MMM yyyy H:m:s zzz", // RFC 5322
-            "ddd, d MMM yyyy H:m:s", // RFC 5322 no zone
-            "d MMM yyyy H:m:s zzz", // RFC 5322 no day-of-week
-            "d MMM yyyy H:m:s", // RFC 5322 no day-of-week, no zone
-        };
 
         internal const char CR = (char)13;
         internal const char LF = (char)10;
@@ -40,7 +20,7 @@ namespace System.Net.Http
         internal const int MaxInt32Digits = 10;
 
         // iso-8859-1, Western European (ISO)
-#if PHONE || NETNative
+#if uap
         internal static readonly Encoding DefaultHttpEncoding = Encoding.GetEncoding("iso-8859-1");
 #else
         internal static readonly Encoding DefaultHttpEncoding = Encoding.GetEncoding(28591);
@@ -94,7 +74,7 @@ namespace System.Net.Http
         [Pure]
         internal static int GetTokenLength(string input, int startIndex)
         {
-            Contract.Requires(input != null);
+            Debug.Assert(input != null);
             Contract.Ensures((Contract.Result<int>() >= 0) && (Contract.Result<int>() <= (input.Length - startIndex)));
 
             if (startIndex >= input.Length)
@@ -115,9 +95,44 @@ namespace System.Net.Http
             return input.Length - startIndex;
         }
 
+        [Pure]
+        internal static bool IsToken(string input)
+        {
+            for (int i = 0; i < input.Length; i++)
+            {
+                if (!IsTokenChar(input[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        [Pure]
+        internal static bool IsToken(ReadOnlySpan<byte> input)
+        {
+            for (int i = 0; i < input.Length; i++)
+            {
+                if (!IsTokenChar((char) input[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        internal static string GetTokenString(ReadOnlySpan<byte> input)
+        {
+            Debug.Assert(IsToken(input));
+
+            return Encoding.ASCII.GetString(input);
+        }
+
         internal static int GetWhitespaceLength(string input, int startIndex)
         {
-            Contract.Requires(input != null);
+            Debug.Assert(input != null);
             Contract.Ensures((Contract.Result<int>() >= 0) && (Contract.Result<int>() <= (input.Length - startIndex)));
 
             if (startIndex >= input.Length)
@@ -199,8 +214,8 @@ namespace System.Net.Http
 
         internal static int GetNumberLength(string input, int startIndex, bool allowDecimal)
         {
-            Contract.Requires(input != null);
-            Contract.Requires((startIndex >= 0) && (startIndex < input.Length));
+            Debug.Assert(input != null);
+            Debug.Assert((startIndex >= 0) && (startIndex < input.Length));
             Contract.Ensures((Contract.Result<int>() >= 0) && (Contract.Result<int>() <= (input.Length - startIndex)));
 
             int current = startIndex;
@@ -244,8 +259,8 @@ namespace System.Net.Http
 
         internal static int GetHostLength(string input, int startIndex, bool allowToken, out string host)
         {
-            Contract.Requires(input != null);
-            Contract.Requires(startIndex >= 0);
+            Debug.Assert(input != null);
+            Debug.Assert(startIndex >= 0);
             Contract.Ensures((Contract.Result<int>() >= 0) && (Contract.Result<int>() <= (input.Length - startIndex)));
 
             host = null;
@@ -309,8 +324,8 @@ namespace System.Net.Http
         // CHAR = <any US-ASCII character (octets 0 - 127)>
         internal static HttpParseResult GetQuotedPairLength(string input, int startIndex, out int length)
         {
-            Contract.Requires(input != null);
-            Contract.Requires((startIndex >= 0) && (startIndex < input.Length));
+            Debug.Assert(input != null);
+            Debug.Assert((startIndex >= 0) && (startIndex < input.Length));
             Contract.Ensures((Contract.ValueAtReturn(out length) >= 0) &&
                 (Contract.ValueAtReturn(out length) <= (input.Length - startIndex)));
 
@@ -333,25 +348,6 @@ namespace System.Net.Http
             return HttpParseResult.Parsed;
         }
 
-        internal static string DateToString(DateTimeOffset dateTime)
-        {
-            // Format according to RFC1123; 'r' uses invariant info (DateTimeFormatInfo.InvariantInfo).
-            return dateTime.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture);
-        }
-
-        internal static bool TryStringToDate(string input, out DateTimeOffset result)
-        {
-            // Try the various date formats in the order listed above. 
-            // We should accept a wide variety of common formats, but only output RFC 1123 style dates.
-            if (DateTimeOffset.TryParseExact(input, s_dateFormats, DateTimeFormatInfo.InvariantInfo,
-                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal, out result))
-            {
-                return true;
-            }
-
-            return false;
-        }
-
         // TEXT = <any OCTET except CTLs, but including LWS>
         // LWS = [CRLF] 1*( SP | HT )
         // CTL = <any US-ASCII control character (octets 0 - 31) and DEL (127)>
@@ -366,8 +362,8 @@ namespace System.Net.Http
         private static HttpParseResult GetExpressionLength(string input, int startIndex, char openChar,
             char closeChar, bool supportsNesting, ref int nestedCount, out int length)
         {
-            Contract.Requires(input != null);
-            Contract.Requires((startIndex >= 0) && (startIndex < input.Length));
+            Debug.Assert(input != null);
+            Debug.Assert((startIndex >= 0) && (startIndex < input.Length));
             Contract.Ensures((Contract.Result<HttpParseResult>() != HttpParseResult.Parsed) ||
                 (Contract.ValueAtReturn<int>(out length) > 0));
 
@@ -435,6 +431,9 @@ namespace System.Net.Http
                     {
                         nestedCount--;
                     }
+
+                    // after nested call we continue with parsing
+                    continue;
                 }
 
                 if (input[current] == closeChar)

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using Xunit;
 
 namespace System.Linq.Tests
@@ -13,7 +12,7 @@ namespace System.Linq.Tests
         public void CastIntToLongThrows()
         {
             var q = from x in new[] { 9999, 0, 888, -1, 66, -777, 1, 2, -12345 }
-                    where x > Int32.MinValue
+                    where x > int.MinValue
                     select x;
 
             var rst = q.AsQueryable().Cast<long>();
@@ -205,7 +204,7 @@ namespace System.Linq.Tests
         [Fact]
         public void NullSource()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IQueryable<object>)null).Cast<string>());
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IQueryable<object>)null).Cast<string>());
         }
 
         [Fact]

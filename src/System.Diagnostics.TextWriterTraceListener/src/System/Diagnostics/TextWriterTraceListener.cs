@@ -16,7 +16,8 @@ namespace System.Diagnostics
     /// </devdoc>
     public class TextWriterTraceListener : TraceListener
     {
-        internal TextWriter writer;
+        internal TextWriter _writer;
+        private string _fileName;
 
         /// <devdoc>
         /// <para>Initializes a new instance of the <see cref='System.Diagnostics.TextWriterTraceListener'/> class with
@@ -44,7 +45,7 @@ namespace System.Diagnostics
             : base(name)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
-            this.writer = new StreamWriter(stream);
+            _writer = new StreamWriter(stream);
         }
 
         /// <devdoc>
@@ -66,7 +67,26 @@ namespace System.Diagnostics
             : base(name)
         {
             if (writer == null) throw new ArgumentNullException(nameof(writer));
-            this.writer = writer;
+            _writer = writer;
+        }
+
+        /// <devdoc>
+        ///    <para>Initializes a new instance of the <see cref='System.Diagnostics.TextWriterTraceListener'/> class with the 
+        ///    specified file name.</para>
+        /// </devdoc>
+        public TextWriterTraceListener(string fileName)
+        {
+            _fileName = fileName;
+        }
+
+        /// <devdoc>
+        ///    <para>Initializes a new instance of the <see cref='System.Diagnostics.TextWriterTraceListener'/> class with the 
+        ///    specified name and the specified file name.</para>
+        /// </devdoc>
+        public TextWriterTraceListener(string fileName, string name)
+            : base(name)
+        {
+            _fileName = fileName;
         }
 
         /// <devdoc>
@@ -77,13 +97,35 @@ namespace System.Diagnostics
         {
             get
             {
-                return writer;
+                EnsureWriter();
+                return _writer;
             }
 
             set
             {
-                writer = value;
+                _writer = value;
             }
+        }
+
+        /// <devdoc>
+        /// <para>Closes the <see cref='System.Diagnostics.TextWriterTraceListener.Writer'/> so that it no longer
+        ///    receives tracing or debugging output.</para>
+        /// </devdoc>
+        public override void Close()
+        {
+            if (_writer != null)
+            {
+                try 
+                {
+                    _writer.Close();
+                }
+                catch (ObjectDisposedException) { }
+                _writer = null;
+            }
+
+            // We need to set the _fileName to null so that we stop tracing output, if we don't set it
+            // EnsureWriter will create the stream writer again if someone writes or traces output after closing.
+            _fileName = null;
         }
 
         /// <internalonly/>
@@ -93,9 +135,9 @@ namespace System.Diagnostics
         {
             try
             {
-                if (disposing && writer != null)
+                if (disposing && _writer != null)
                 {
-                    writer.Dispose();
+                    _writer.Dispose();
                 }
             }
             finally
@@ -109,10 +151,10 @@ namespace System.Diagnostics
         /// </devdoc>
         public override void Flush()
         {
+            EnsureWriter();
             try
             {
-                if (writer != null)
-                    writer.Flush();
+                _writer?.Flush();
             }
             catch (ObjectDisposedException) { }
         }
@@ -123,12 +165,13 @@ namespace System.Diagnostics
         /// </devdoc>
         public override void Write(string message)
         {
-            if (writer != null)
+            EnsureWriter();
+            if (_writer != null)
             {
                 if (NeedIndent) WriteIndent();
                 try
                 {
-                    writer.Write(message);
+                    _writer.Write(message);
                 }
                 catch (ObjectDisposedException) { }
             }
@@ -141,16 +184,97 @@ namespace System.Diagnostics
         /// </devdoc>
         public override void WriteLine(string message)
         {
-            if (writer != null)
+            EnsureWriter();
+            if (_writer != null)
             {
                 if (NeedIndent) WriteIndent();
                 try
                 {
-                    writer.WriteLine(message);
+                    _writer.WriteLine(message);
                     NeedIndent = true;
                 }
                 catch (ObjectDisposedException) { }
             }
         }
+
+        private static Encoding GetEncodingWithFallback(Encoding encoding)
+        {
+            // Clone it and set the "?" replacement fallback
+            Encoding fallbackEncoding = (Encoding)encoding.Clone();
+            fallbackEncoding.EncoderFallback = EncoderFallback.ReplacementFallback;
+            fallbackEncoding.DecoderFallback = DecoderFallback.ReplacementFallback;
+
+            return fallbackEncoding;
+        }
+
+        internal void EnsureWriter()
+        {
+            bool success = true;
+
+            if (_writer == null)
+            {
+                success = false;
+
+                if (_fileName == null)
+                    return;
+
+                // StreamWriter by default uses UTF8Encoding which will throw on invalid encoding errors.
+                // This can cause the internal StreamWriter's state to be irrecoverable. It is bad for tracing 
+                // APIs to throw on encoding errors. Instead, we should provide a "?" replacement fallback  
+                // encoding to substitute illegal chars. For ex, In case of high surrogate character 
+                // D800-DBFF without a following low surrogate character DC00-DFFF
+                // NOTE: We also need to use an encoding that does't emit BOM which is StreamWriter's default
+                Encoding noBOMwithFallback = GetEncodingWithFallback(new System.Text.UTF8Encoding(false));
+
+
+                // To support multiple appdomains/instances tracing to the same file,
+                // we will try to open the given file for append but if we encounter 
+                // IO errors, we will prefix the file name with a unique GUID value 
+                // and try one more time
+                string fullPath = Path.GetFullPath(_fileName);
+                string dirPath = Path.GetDirectoryName(fullPath);
+                string fileNameOnly = Path.GetFileName(fullPath);
+
+                for (int i = 0; i < 2; i++)
+                {
+                    try
+                    {
+                        _writer = new StreamWriter(fullPath, true, noBOMwithFallback, 4096);
+                        success = true;
+                        break;
+                    }
+                    catch (IOException)
+                    {
+                        fileNameOnly = Guid.NewGuid().ToString() + fileNameOnly;
+                        fullPath = Path.Combine(dirPath, fileNameOnly);
+                        continue;
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        //ERROR_ACCESS_DENIED, mostly ACL issues
+                        break;
+                    }
+                    catch (Exception)
+                    {
+                        break;
+                    }
+                }
+
+                if (!success)
+                {
+                    // Disable tracing to this listener. Every Write will be nop.
+                    // We need to think of a central way to deal with the listener
+                    // init errors in the future. The default should be that we eat 
+                    // up any errors from listener and optionally notify the user
+                    _fileName = null;
+                }
+            }            
+        }
+
+        internal bool IsEnabled(TraceOptions opts)
+        {
+            return (opts & TraceOutputOptions) != 0;
+        }
+
     }
 }

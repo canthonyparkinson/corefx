@@ -2,20 +2,28 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics;
-
 namespace System.Net
 {
-    internal class InternalException : Exception
+    internal sealed class InternalException : Exception
     {
+        private readonly object _unexpectedValue;
+
         internal InternalException()
         {
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Assert("InternalException thrown.");
-            }
-
-            Debug.Fail("InternalException thrown.");
+            NetEventSource.Fail(this, "InternalException thrown.");
         }
+
+        internal InternalException(object unexpectedValue)
+        {
+            _unexpectedValue = unexpectedValue;
+            if (NetEventSource.IsEnabled)
+            {
+                NetEventSource.Fail(this, $"InternalException thrown for unexpected value: {unexpectedValue}");
+            }
+        }
+
+        public override string Message => _unexpectedValue != null ?
+            base.Message + " " + _unexpectedValue :
+            base.Message;
     }
 }

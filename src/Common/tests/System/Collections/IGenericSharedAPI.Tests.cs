@@ -19,11 +19,17 @@ namespace System.Collections.Tests
     {
         #region IGenericSharedAPI<T> Helper methods
 
-        protected virtual bool DuplicateValuesAllowed { get { return true; } }
-        protected virtual bool DefaultValueWhenNotAllowed_Throws { get { return true; } }
-        protected virtual bool IsReadOnly { get { return false; } }
-        protected virtual bool DefaultValueAllowed { get { return true; } }
-        protected virtual IEnumerable<T> InvalidValues { get { return Array.Empty<T>(); } }
+        protected virtual bool DuplicateValuesAllowed => true;
+        protected virtual bool DefaultValueWhenNotAllowed_Throws => true;
+        protected virtual bool IsReadOnly => false;
+        protected virtual bool DefaultValueAllowed => true;
+        protected virtual IEnumerable<T> InvalidValues => Array.Empty<T>();
+
+        /// <summary>
+        /// Used for the IGenericSharedAPI_CopyTo_IndexLargerThanArrayCount_ThrowsArgumentException tests. Some
+        /// implementations throw a different exception type (e.g. ArgumentOutOfRangeException).
+        /// </summary>
+        protected virtual Type IGenericSharedAPI_CopyTo_IndexLargerThanArrayCount_ThrowType => typeof(ArgumentException);
 
         protected virtual void AddToCollection(IEnumerable<T> collection, int numberOfItemsToAdd)
         {
@@ -60,26 +66,35 @@ namespace System.Collections.Tests
         }
 
         protected abstract IEnumerable<T> GenericIEnumerableFactory();
-        
+
         /// <summary>
         /// Returns a set of ModifyEnumerable delegates that modify the enumerable passed to them.
         /// </summary>
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations)
         {
-            get
+            if ((operations & ModifyOperation.Add) == ModifyOperation.Add)
             {
-                yield return (IEnumerable<T> enumerable) => {
+                yield return (IEnumerable<T> enumerable) =>
+                {
                     Add(enumerable, CreateT(12));
                     return true;
                 };
-                yield return (IEnumerable<T> enumerable) => {
+            }
+            if ((operations & ModifyOperation.Remove) == ModifyOperation.Remove)
+            {
+                yield return (IEnumerable<T> enumerable) =>
+                {
                     if (Count(enumerable) > 0)
-                    { 
+                    {
                         return Remove(enumerable);
                     }
                     return false;
                 };
-                yield return (IEnumerable<T> enumerable) => {
+            }
+            if ((operations & ModifyOperation.Clear) == ModifyOperation.Clear)
+            {
+                yield return (IEnumerable<T> enumerable) =>
+                {
                     if (Count(enumerable) > 0)
                     {
                         Clear(enumerable);
@@ -207,7 +222,7 @@ namespace System.Collections.Tests
                 List<T> items = collection.ToList();
                 T toAdd = CreateT(seed++);
                 while (Contains(collection, toAdd))
-                   toAdd = CreateT(seed++);
+                    toAdd = CreateT(seed++);
                 Add(collection, toAdd);
                 Remove(collection);
 
@@ -254,7 +269,7 @@ namespace System.Collections.Tests
                 Assert.Equal(0, Count(collection));
             }
         }
-        
+
         #endregion
 
         #region Contains
@@ -265,18 +280,18 @@ namespace System.Collections.Tests
         {
             IEnumerable<T> collection = GenericIEnumerableFactory(count);
             T[] array = collection.ToArray();
-            
+
             // Collection should contain all items that result from enumeration
             Assert.All(array, item => Assert.True(Contains(collection, item)));
-            
+
             Clear(collection);
-            
+
             // Collection should not contain any items after being cleared
             Assert.All(array, item => Assert.False(Contains(collection, item)));
-            
+
             foreach (T item in array)
                 Add(collection, item);
-            
+
             // Collection should contain whatever items are added back to it
             Assert.All(array, item => Assert.True(Contains(collection, item)));
         }
@@ -355,7 +370,7 @@ namespace System.Collections.Tests
             if (!DefaultValueAllowed && !IsReadOnly)
             {
                 if (DefaultValueWhenNotAllowed_Throws)
-                    Assert.ThrowsAny<ArgumentNullException>(() => Contains(collection, default(T)));
+                    Assert.Throws<ArgumentNullException>(() => Contains(collection, default(T)));
                 else
                     Assert.False(Contains(collection, default(T)));
             }
@@ -401,7 +416,7 @@ namespace System.Collections.Tests
         {
             IEnumerable<T> collection = GenericIEnumerableFactory(count);
             T[] array = new T[count];
-            Assert.ThrowsAny<ArgumentException>(() => CopyTo(collection, array, count + 1)); // some implementations throw ArgumentOutOfRangeException for this scenario
+            Assert.Throws(IGenericSharedAPI_CopyTo_IndexLargerThanArrayCount_ThrowType, () => CopyTo(collection, array, count + 1));
         }
 
         [Theory]

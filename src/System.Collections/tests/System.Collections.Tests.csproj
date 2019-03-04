@@ -1,95 +1,82 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{9574CEEC-5554-411B-B44C-6CA9EC1CEB08}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <AssemblyName>System.Collections.Tests</AssemblyName>
-    <RootNamespace>System.Collections.Tests</RootNamespace>
-    <IncludePerformanceTests>true</IncludePerformanceTests>
+    <ProjectGuid>{F5EB9630-AD29-4880-963F-F2D39C684D8A}</ProjectGuid>
+    <Configurations>netcoreapp-Debug;netcoreapp-Release;netstandard-Debug;netstandard-Release</Configurations>
+    <TestRuntime>true</TestRuntime>
   </PropertyGroup>
-  <!-- Default configurations to help VS understand the configurations -->
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-  </PropertyGroup>
-  <ItemGroup>
-    <!-- Compile tests against the contract, but copy our local-built implementation for testing -->
-    <ProjectReference Include="..\src\System.Collections.csproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-      <OutputItemType>Content</OutputItemType>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Targets>Build;DebugSymbolsProjectOutputGroup</Targets>
-      <OSGroup>$(InputOSGroup)</OSGroup>
-    </ProjectReference>
-    <ProjectReference Include="..\..\System.Runtime\src\System.Runtime.csproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-      <OutputItemType>Content</OutputItemType>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Targets>Build;DebugSymbolsProjectOutputGroup</Targets>
-    </ProjectReference>
-    <ProjectReference Include="..\..\System.Diagnostics.Debug\src\System.Diagnostics.Debug.csproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-      <OutputItemType>Content</OutputItemType>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Targets>Build;DebugSymbolsProjectOutputGroup</Targets>
-      <OSGroup>$(InputOSGroup)</OSGroup>
-    </ProjectReference>
-  </ItemGroup>
   <ItemGroup>
     <!-- Common Collections tests -->
-    <Compile Include="$(CommonTestPath)\System\Collections\CollectionAsserts.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\CollectionAsserts.cs">
       <Link>Common\System\Collections\CollectionAsserts.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\ICollection.NonGeneric.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\ICollection.NonGeneric.Tests.cs">
       <Link>Common\System\Collections\ICollection.NonGeneric.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\ICollection.Generic.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\ICollection.Generic.Tests.cs">
       <Link>Common\System\Collections\ICollection.Generic.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\IDictionary.NonGeneric.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\IDictionary.NonGeneric.Tests.cs">
       <Link>Common\System\Collections\IDictionary.NonGeneric.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\IDictionary.Generic.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\IDictionary.Generic.Tests.cs">
       <Link>Common\System\Collections\IDictionary.Generic.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\IEnumerable.NonGeneric.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\IEnumerable.NonGeneric.Tests.cs">
       <Link>Common\System\Collections\IEnumerable.NonGeneric.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\IEnumerable.Generic.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\IEnumerable.Generic.Tests.cs">
       <Link>Common\System\Collections\IEnumerable.Generic.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\IList.NonGeneric.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\IList.NonGeneric.Tests.cs">
       <Link>Common\System\Collections\IList.NonGeneric.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\IList.Generic.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\IList.Generic.Tests.cs">
       <Link>Common\System\Collections\IList.Generic.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\IGenericSharedAPI.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\IGenericSharedAPI.Tests.cs">
       <Link>Common\System\Collections\IGenericSharedAPI.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\ISet.Generic.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\ISet.Generic.Tests.cs">
       <Link>Common\System\Collections\ISet.Generic.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\TestBase.NonGeneric.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\TestBase.NonGeneric.cs">
       <Link>Common\System\Collections\TestBase.NonGeneric.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\TestBase.Generic.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\TestBase.Generic.cs">
       <Link>Common\System\Collections\TestBase.Generic.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\DebugView.Tests.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\DebugView.Tests.cs">
       <Link>Common\System\Collections\DebugView.Tests.cs</Link>
     </Compile>
-    <Compile Include="$(CommonTestPath)\System\Collections\TestingTypes.cs" >
+    <Compile Include="$(CommonTestPath)\System\Collections\TestingTypes.cs">
       <Link>Common\System\Collections\TestingTypes.cs</Link>
     </Compile>
+    <Compile Include="$(CommonTestPath)\System\EnumTypes.cs">
+      <Link>Common\System\EnumTypes.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\ObjectCloner.cs">
+      <Link>Common\System\ObjectCloner.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\RandomExtensions.cs">
+      <Link>Common\System\RandomExtensions.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Collections\DictionaryExtensions.cs" Condition="'$(TargetGroup)'!='netcoreapp'">
+      <Link>Common\System\Collections\DictionaryExtensions.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Runtime\Serialization\Formatters\BinaryFormatterHelpers.cs">
+      <Link>Common\System\Runtime\Serialization\Formatters\BinaryFormatterHelpers.cs</Link>
+    </Compile>
     <!-- Generic tests -->
+    <Compile Include="Generic\SortedSet\SortedSet.TreeSubSet.Tests.cs" />
     <Compile Include="StructuralComparisonsTests.cs" />
     <Compile Include="BitArray\BitArray_CtorTests.cs" />
     <Compile Include="BitArray\BitArray_GetSetTests.cs" />
     <Compile Include="BitArray\BitArray_OperatorsTests.cs" />
+    <Compile Include="Generic\Comparers\Comparer.Generic.Tests.cs" />
+    <Compile Include="Generic\Comparers\Comparer.Tests.cs" />
+    <Compile Include="Generic\Comparers\Comparers.Generic.cs" />
+    <Compile Include="Generic\Comparers\EqualityComparer.Generic.Tests.cs" />
+    <Compile Include="Generic\Comparers\EqualityComparer.Tests.cs" />
     <Compile Include="Generic\Dictionary\Dictionary.Tests.cs" />
     <Compile Include="Generic\Dictionary\HashCollisionScenarios\InputData.cs" />
     <Compile Include="Generic\Dictionary\HashCollisionScenarios\OutOfBoundsRegression.cs" />
@@ -124,6 +111,7 @@
     <Compile Include="Generic\List\List.Generic.Tests.AddRange.cs" />
     <Compile Include="Generic\List\List.Generic.Tests.BinarySearch.cs" />
     <Compile Include="Generic\List\List.Generic.Tests.Constructor.cs" />
+    <Compile Include="Generic\List\List.Generic.Tests.ConvertAll.cs" />
     <Compile Include="Generic\List\List.Generic.Tests.Find.cs" />
     <Compile Include="Generic\List\List.Generic.Tests.Remove.cs" />
     <Compile Include="Generic\List\List.Generic.Tests.Sort.cs" />
@@ -149,19 +137,31 @@
     <Compile Include="$(CommonTestPath)\System\Diagnostics\DebuggerAttributes.cs">
       <Link>Common\System\Diagnostics\DebuggerAttributes.cs</Link>
     </Compile>
-    <!-- Performance Tests -->
-    <Compile Include="Performance\Perf.Dictionary.cs" />
-    <Compile Include="Performance\Perf.HashSet.cs" />
-    <Compile Include="Performance\Perf.List.cs" />
-    <Compile Include="$(CommonTestPath)\System\PerfUtils.cs">
-      <Link>Common\System\PerfUtils.cs</Link>
+    <Compile Include="Generic\Comparers\EqualityComparer.Generic.Serialization.Tests.cs" />
+    <Compile Include="$(CommonTestPath)\System\Collections\IEnumerable.NonGeneric.Serialization.Tests.cs">
+      <Link>Common\System\Collections\IEnumerable.NonGeneric.Serialization.Tests.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Collections\IEnumerable.Generic.Serialization.Tests.cs">
+      <Link>Common\System\Collections\IEnumerable.Generic.Serialization.Tests.cs</Link>
     </Compile>
   </ItemGroup>
-  <PropertyGroup Condition="'$(Performance)' == 'true'">
-    <IncludePerformanceTests>true</IncludePerformanceTests>
-  </PropertyGroup>
-  <ItemGroup>
-    <None Include="project.json" />
+  <ItemGroup Condition="'$(TargetGroup)'=='netcoreapp'">
+    <Compile Include="BitArray\BitArray_OperatorsTests.netcoreapp.cs" />
+    <Compile Include="Generic\CollectionExtensionsTests.cs" />
+    <Compile Include="Generic\Dictionary\Dictionary.Generic.Tests.netcoreapp.cs" />
+    <Compile Include="Generic\Dictionary\Dictionary.Generic.Tests.ConcurrentAccessDetection.netcoreapp.cs" />
+    <Compile Include="Generic\HashSet\HashSet.Generic.Tests.netcoreapp.cs" />
+    <Compile Include="Generic\Stack\Stack.Generic.Tests.netcoreapp.cs" />
+    <Compile Include="Generic\SortedSet\SortedSet.Generic.Tests.netcoreapp.cs" />
+    <Compile Include="Generic\Queue\Queue.Generic.Tests.netcoreapp.cs" />
+    <Compile Include="$(CommonTestPath)\System\Collections\IDictionary.Generic.Tests.netcoreapp.cs">
+      <Link>Common\System\Collections\IDictionary.Generic.Tests.netcoreapp.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Collections\IDictionary.NonGeneric.Tests.netcoreapp.cs">
+      <Link>Common\System\Collections\IDictionary.NonGeneric.Tests.netcoreapp.cs</Link>
+    </Compile>
   </ItemGroup>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.targets))\dir.targets" />
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\$(AssemblyName).rd.xml" />
+  </ItemGroup>
 </Project>

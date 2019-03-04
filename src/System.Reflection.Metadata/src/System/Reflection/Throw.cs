@@ -19,9 +19,9 @@ namespace System.Reflection
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        internal static void LitteEndianArchitectureRequired()
+        internal static void InvalidArgument(string message, string parameterName)
         {
-            throw new PlatformNotSupportedException(SR.LitteEndianArchitectureRequired);
+            throw new ArgumentException(message, parameterName);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -37,21 +37,39 @@ namespace System.Reflection
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static Exception InvalidArgument_Handle(string parameterName)
+        {
+            throw new ArgumentException(SR.Format(SR.InvalidHandle), parameterName);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void SignatureNotVarArg()
         {
             throw new InvalidOperationException(SR.SignatureNotVarArg);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        internal static void BranchBuilderNotAvailable()
+        internal static void ControlFlowBuilderNotAvailable()
         {
-            throw new InvalidOperationException(SR.BranchBuilderNotAvailable);
+            throw new InvalidOperationException(SR.ControlFlowBuilderNotAvailable);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void InvalidOperationBuilderAlreadyLinked()
         {
             throw new InvalidOperationException(SR.BuilderAlreadyLinked);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void InvalidOperation(string message)
+        {
+            throw new InvalidOperationException(message);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void InvalidOperation_LabelNotMarked(int id)
+        {
+            throw new InvalidOperationException(SR.Format(SR.LabelNotMarked, id));
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -85,6 +103,18 @@ namespace System.Reflection
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void ArgumentEmptyString(string parameterName)
+        {
+            throw new ArgumentException(SR.ExpectedNonEmptyString, parameterName);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void ArgumentEmptyArray(string parameterName)
+        {
+            throw new ArgumentException(SR.ExpectedNonEmptyArray, parameterName);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void ValueArgumentNull()
         {
             throw new ArgumentNullException("value");
@@ -100,6 +130,12 @@ namespace System.Reflection
         internal static void ArgumentOutOfRange(string parameterName)
         {
             throw new ArgumentOutOfRangeException(parameterName);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void ArgumentOutOfRange(string parameterName, string message)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, message);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -183,7 +219,19 @@ namespace System.Reflection
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void TableNotSorted(TableIndex tableIndex)
         {
-            throw new BadImageFormatException(SR.Format(SR.MetadataTableNotSorted, (int)tableIndex));
+            throw new BadImageFormatException(SR.Format(SR.MetadataTableNotSorted, tableIndex));
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void InvalidOperation_TableNotSorted(TableIndex tableIndex)
+        {
+            throw new InvalidOperationException(SR.Format(SR.MetadataTableNotSorted, tableIndex));
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void InvalidOperation_PEImageNotAvailable()
+        {
+            throw new InvalidOperationException(SR.PEImageNotAvailable);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -208,6 +256,12 @@ namespace System.Reflection
         internal static void HeapSizeLimitExceeded(HeapIndex heap)
         {
             throw new ImageFormatLimitationException(SR.Format(SR.HeapSizeLimitExceeded, heap));
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void PEReaderDisposed()
+        {
+            throw new ObjectDisposedException(nameof(PortableExecutable.PEReader));
         }
     }
 }

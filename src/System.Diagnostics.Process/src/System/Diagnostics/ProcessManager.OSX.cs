@@ -16,26 +16,9 @@ namespace System.Diagnostics
             return Interop.libproc.proc_listallpids();
         }
 
-        /// <summary>Gets process infos for each process on the specified machine.</summary>
-        /// <param name="machineName">The target machine.</param>
-        /// <returns>An array of process infos, one per found process.</returns>
-        public static ProcessInfo[] GetProcessInfos(string machineName)
+        private static string GetProcPath(int processId)
         {
-            ThrowIfRemoteMachine(machineName);
-            int[] procIds = GetProcessIds(machineName);
-
-            // Iterate through all process IDs to load information about each process
-            var processes = new List<ProcessInfo>(procIds.Length);
-            foreach (int pid in procIds)
-            {
-                ProcessInfo pi = CreateProcessInfo(pid);
-                if (pi != null)
-                {
-                    processes.Add(pi);
-                }
-            }
-
-            return processes.ToArray();
+            return Interop.libproc.proc_pidpath(processId);
         }
 
         // -----------------------------
@@ -72,7 +55,7 @@ namespace System.Diagnostics
             int sessionId = Interop.Sys.GetSid(pid);
             if (sessionId != -1)
                 procInfo.SessionId = sessionId;
-            
+
             // Create a threadinfo for each thread in the process
             List<KeyValuePair<ulong, Interop.libproc.proc_threadinfo?>> lstThreads = Interop.libproc.GetAllThreadsInProcess(pid);
             foreach (KeyValuePair<ulong, Interop.libproc.proc_threadinfo?> t in lstThreads)
@@ -97,35 +80,6 @@ namespace System.Diagnostics
             }
 
             return procInfo;
-        }
-
-        /// <summary>Gets an array of module infos for the specified process.</summary>
-        /// <param name="processId">The ID of the process whose modules should be enumerated.</param>
-        /// <returns>The array of modules.</returns>
-        internal static ModuleInfo[] GetModuleInfos(int processId)
-        {
-            // We don't have a good way of getting all of the modules of the particular process,
-            // but we can at least get the path to the executable file for the process, and
-            // other than for debugging tools, that's the main reason consumers of Modules care about it,
-            // and why MainModule exists.
-            try
-            {
-                string exePath = Interop.libproc.proc_pidpath(processId);
-                if (!string.IsNullOrEmpty(exePath))
-                {
-                    return new ModuleInfo[1]
-                    {
-                        new ModuleInfo()
-                        {
-                            _fileName = exePath,
-                            _baseName = Path.GetFileName(exePath),
-                        }
-                    };
-                }
-            }
-            catch { } // eat all errors
-
-            return Array.Empty<ModuleInfo>();
         }
 
         // ----------------------------------

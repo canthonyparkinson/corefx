@@ -4,7 +4,6 @@
 
 using System;
 using System.Diagnostics;
-using System.Diagnostics.Contracts;
 
 namespace System.Net.Http.Headers
 {
@@ -96,7 +95,7 @@ namespace System.Net.Http.Headers
                 try
                 {
                     // We don't want '?' replacement characters, just fail.
-#if PHONE || NETNative
+#if uap
                     System.Text.Encoding decoder = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true, throwOnInvalidBytes: true);
 #else
                     System.Text.Encoding decoder = System.Text.Encoding.GetEncoding("utf-8", System.Text.EncoderFallback.ExceptionFallback,

@@ -9,10 +9,10 @@ namespace System.Data.SqlClient.ManualTesting.Tests
 {
     public static class WeakRefTest
     {
-        private const string COMMAND_TEXT_1 = "SELECT au_id, au_lname, au_fname, phone, address, city, state, zip, contract from authors";
-        private const string COMMAND_TEXT_2 = "SELECT au_lname from authors";
-        private const string COLUMN_NAME_2 = "au_lname";
-        private const string DATABASE_NAME = "Northwind";
+        private const string COMMAND_TEXT_1 = "SELECT EmployeeID, LastName, FirstName, Title, Address, City, Region, PostalCode, Country from Employees";
+        private const string COMMAND_TEXT_2 = "SELECT LastName from Employees";
+        private const string COLUMN_NAME_2 = "LastName";
+        private const string CHANGE_DATABASE_NAME = "master";
 
         private enum ReaderTestType
         {
@@ -40,10 +40,15 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             TransactionGCConnectionClose,
         }
 
-        [Fact]
+        [ConditionalFact(typeof(DataTestUtility),nameof(DataTestUtility.AreConnStringsSetup))]
         public static void TestReaderNonMars()
         {
-            string connString = DataTestClass.SQL2005_Pubs + ";Max Pool Size=1";
+            string connString =
+                (new SqlConnectionStringBuilder(DataTestUtility.TcpConnStr) 
+                {
+                    MaxPoolSize = 1
+                }
+                ).ConnectionString;
 
             TestReaderNonMarsCase("Case 1: ExecuteReader, Close, ExecuteReader.", connString, ReaderTestType.ReaderClose, ReaderVerificationType.ExecuteReader);
             TestReaderNonMarsCase("Case 2: ExecuteReader, Dispose, ExecuteReader.", connString, ReaderTestType.ReaderDispose, ReaderVerificationType.ExecuteReader);
@@ -64,10 +69,14 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             TestReaderNonMarsCase("Case 15: ExecuteReader, GC, Connection Close, BeginTransaction.", connString, ReaderTestType.ReaderGCConnectionClose, ReaderVerificationType.BeginTransaction);
         }
 
-        [Fact]
+        [ConditionalFact(typeof(DataTestUtility),nameof(DataTestUtility.AreConnStringsSetup))]
         public static void TestTransactionSingle()
         {
-            string connString = DataTestClass.SQL2005_Pubs + ";Max Pool Size=1";
+            string connString =
+                (new SqlConnectionStringBuilder(DataTestUtility.TcpConnStr) 
+                {
+                    MaxPoolSize = 1
+                }).ConnectionString;
 
             TestTransactionSingleCase("Case 1: BeginTransaction, Rollback.", connString, TransactionTestType.TransactionRollback);
             TestTransactionSingleCase("Case 2: BeginTransaction, Dispose.", connString, TransactionTestType.TransactionDispose);
@@ -138,8 +147,8 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                             break;
 
                         case ReaderVerificationType.ChangeDatabase:
-                            con.ChangeDatabase(DATABASE_NAME);
-                            Assert.Equal(con.Database, DATABASE_NAME);
+                            con.ChangeDatabase(CHANGE_DATABASE_NAME);
+                            Assert.Equal(con.Database, CHANGE_DATABASE_NAME);
                             break;
 
                         case ReaderVerificationType.BeginTransaction:

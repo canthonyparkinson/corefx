@@ -2,20 +2,41 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.IO;
-using System.Text;
-using System.Diagnostics;
-using System.Globalization;
-using System.Runtime.InteropServices;
-
 using Internal.Cryptography;
 using Internal.Cryptography.Pal;
+using System;
+using System.IO;
+using System.Runtime.Serialization;
+using System.Security;
+using System.Text;
 
 namespace System.Security.Cryptography.X509Certificates
 {
     public class X509Certificate2 : X509Certificate
     {
+        private volatile byte[] _lazyRawData;
+        private volatile Oid _lazySignatureAlgorithm;
+        private volatile int _lazyVersion;
+        private volatile X500DistinguishedName _lazySubjectName;
+        private volatile X500DistinguishedName _lazyIssuerName;
+        private volatile PublicKey _lazyPublicKey;
+        private volatile AsymmetricAlgorithm _lazyPrivateKey;
+        private volatile X509ExtensionCollection _lazyExtensions;
+
+        public override void Reset()
+        {
+            _lazyRawData = null;
+            _lazySignatureAlgorithm = null;
+            _lazyVersion = 0;
+            _lazySubjectName = null;
+            _lazyIssuerName = null;
+            _lazyPublicKey = null;
+            _lazyPrivateKey = null;
+            _lazyExtensions = null;
+
+            base.Reset();
+        }
+
         public X509Certificate2()
             : base()
         {
@@ -31,7 +52,19 @@ namespace System.Security.Cryptography.X509Certificates
         {
         }
 
+        [System.CLSCompliantAttribute(false)]
+        public X509Certificate2(byte[] rawData, SecureString password)
+            : base(rawData, password)
+        {
+        }
+
         public X509Certificate2(byte[] rawData, string password, X509KeyStorageFlags keyStorageFlags)
+            : base(rawData, password, keyStorageFlags)
+        {
+        }
+
+        [System.CLSCompliantAttribute(false)]
+        public X509Certificate2(byte[] rawData, SecureString password, X509KeyStorageFlags keyStorageFlags)
             : base(rawData, password, keyStorageFlags)
         {
         }
@@ -56,10 +89,36 @@ namespace System.Security.Cryptography.X509Certificates
         {
         }
 
+        [System.CLSCompliantAttribute(false)]
+        public X509Certificate2(string fileName, SecureString password)
+            : base(fileName, password)
+        {
+        }
+
+
         public X509Certificate2(string fileName, string password, X509KeyStorageFlags keyStorageFlags)
             : base(fileName, password, keyStorageFlags)
         {
         }
+
+        [System.CLSCompliantAttribute(false)]
+        public X509Certificate2(string fileName, SecureString password, X509KeyStorageFlags keyStorageFlags)
+            : base(fileName, password, keyStorageFlags)
+        {
+        }
+
+        public X509Certificate2(X509Certificate certificate)
+            : base(certificate)
+        {
+        }
+
+        protected X509Certificate2(SerializationInfo info, StreamingContext context)
+            : base(info, context)
+        {
+            throw new PlatformNotSupportedException();
+        }
+
+        internal new ICertificatePal Pal => (ICertificatePal)base.Pal;
 
         public bool Archived
         {
@@ -134,15 +193,51 @@ namespace System.Security.Cryptography.X509Certificates
             }
         }
 
+        public AsymmetricAlgorithm PrivateKey
+        {
+            get
+            {
+                ThrowIfInvalid();
+
+                if (!HasPrivateKey)
+                    return null;
+
+                if (_lazyPrivateKey == null)
+                {
+                    switch (GetKeyAlgorithm())
+                    {
+                        case Oids.Rsa:
+                            _lazyPrivateKey = Pal.GetRSAPrivateKey();
+                            break;
+                        case Oids.Dsa:
+                            _lazyPrivateKey = Pal.GetDSAPrivateKey();
+                            break;
+                        default:
+                            // This includes ECDSA, because an Oids.EcPublicKey key can be
+                            // many different algorithm kinds, not necessarily with mutual exclusion.
+                            //
+                            // Plus, .NET Framework only supports RSA and DSA in this property.
+                            throw new NotSupportedException(SR.NotSupported_KeyAlgorithm);
+                    }
+                }
+
+                return _lazyPrivateKey;
+            }
+            set
+            {
+                throw new PlatformNotSupportedException();
+            }
+        }
+
         public X500DistinguishedName IssuerName
         {
             get
             {
                 ThrowIfInvalid();
 
-                X500DistinguishedName issuerName = _lazyIssuer;
+                X500DistinguishedName issuerName = _lazyIssuerName;
                 if (issuerName == null)
-                    issuerName = _lazyIssuer = Pal.IssuerName;
+                    issuerName = _lazyIssuerName = Pal.IssuerName;
                 return issuerName;
             }
         }
@@ -195,9 +290,7 @@ namespace System.Security.Cryptography.X509Certificates
         {
             get
             {
-                byte[] serialNumber = GetSerialNumber();
-                Array.Reverse(serialNumber);
-                return serialNumber.ToHexStringUpper();
+                return GetSerialNumberString();
             }
         }
 
@@ -234,8 +327,7 @@ namespace System.Security.Cryptography.X509Certificates
         {
             get
             {
-                byte[] thumbPrint = GetCertHash();
-                return thumbPrint.ToHexStringUpper();
+                return GetCertHashString();
             }
         }
 
@@ -485,6 +577,62 @@ namespace System.Security.Cryptography.X509Certificates
             return sb.ToString();
         }
 
+        public override void Import(byte[] rawData)
+        {
+            base.Import(rawData);
+        }
+
+        public override void Import(byte[] rawData, string password, X509KeyStorageFlags keyStorageFlags)
+        {
+            base.Import(rawData, password, keyStorageFlags);
+        }
+
+        [System.CLSCompliantAttribute(false)]
+        public override void Import(byte[] rawData, SecureString password, X509KeyStorageFlags keyStorageFlags)
+        {
+            base.Import(rawData, password, keyStorageFlags);
+        }
+
+        public override void Import(string fileName)
+        {
+            base.Import(fileName);
+        }
+
+        public override void Import(string fileName, string password, X509KeyStorageFlags keyStorageFlags)
+        {
+            base.Import(fileName, password, keyStorageFlags);
+        }
+
+        [System.CLSCompliantAttribute(false)]
+        public override void Import(string fileName, SecureString password, X509KeyStorageFlags keyStorageFlags)
+        {
+            base.Import(fileName, password, keyStorageFlags);
+        }
+
+        public bool Verify()
+        {
+            ThrowIfInvalid();
+
+            using (var chain = new X509Chain())
+            {
+                // Use the default vales of chain.ChainPolicy including:
+                //  RevocationMode = X509RevocationMode.Online
+                //  RevocationFlag = X509RevocationFlag.ExcludeRoot
+                //  VerificationFlags = X509VerificationFlags.NoFlag
+                //  VerificationTime = DateTime.Now
+                //  UrlRetrievalTimeout = new TimeSpan(0, 0, 0)
+
+                bool verified = chain.Build(this, throwOnException: false);
+
+                for (int i = 0; i < chain.ChainElements.Count; i++)
+                {
+                    chain.ChainElements[i].Certificate.Dispose();
+                }
+
+                return verified;
+            }
+        }
+
         private static X509Extension CreateCustomExtensionIfAny(Oid oid)
         {
             string oidValue = oid.Value;
@@ -511,13 +659,5 @@ namespace System.Security.Cryptography.X509Certificates
                     return null;
             }
         }
-
-        private volatile byte[] _lazyRawData;
-        private volatile Oid _lazySignatureAlgorithm;
-        private volatile int _lazyVersion;
-        private volatile X500DistinguishedName _lazySubjectName;
-        private volatile X500DistinguishedName _lazyIssuer;
-        private volatile PublicKey _lazyPublicKey;
-        private volatile X509ExtensionCollection _lazyExtensions;
     }
 }

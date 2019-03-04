@@ -3,11 +3,10 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using Xunit;
 
 namespace System.Collections.Tests
 {
-    public class Dictionary_Generic_Tests_string_string : Dictionary_Generic_Tests<string, string>
+    public partial class Dictionary_Generic_Tests_string_string : Dictionary_Generic_Tests<string, string>
     {
         protected override KeyValuePair<string, string> CreateT(int seed)
         {
@@ -23,15 +22,12 @@ namespace System.Collections.Tests
             return Convert.ToBase64String(bytes1);
         }
 
-        protected override string CreateTValue(int seed)
-        {
-            return CreateTKey(seed);
-        }
+        protected override string CreateTValue(int seed) => CreateTKey(seed);
     }
 
     public class Dictionary_Generic_Tests_int_int : Dictionary_Generic_Tests<int, int>
     {
-        protected override bool DefaultValueAllowed { get { return true; } }
+        protected override bool DefaultValueAllowed => true;
 
         protected override KeyValuePair<int, int> CreateT(int seed)
         {
@@ -45,10 +41,7 @@ namespace System.Collections.Tests
             return rand.Next();
         }
 
-        protected override int CreateTValue(int seed)
-        {
-            return CreateTKey(seed);
-        }
+        protected override int CreateTValue(int seed) => CreateTKey(seed);
     }
 
     public class Dictionary_Generic_Tests_SimpleInt_int_With_Comparer_WrapStructural_SimpleInt : Dictionary_Generic_Tests<SimpleInt, int>

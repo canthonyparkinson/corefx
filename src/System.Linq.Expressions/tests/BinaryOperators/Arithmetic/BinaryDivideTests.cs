@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using Xunit;
 
 namespace System.Linq.Expressions.Tests
@@ -37,7 +36,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckUShortDivideTest(bool useInterpreter)
         {
             ushort[] array = new ushort[] { 0, 1, ushort.MaxValue };
@@ -50,7 +50,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckShortDivideTest(bool useInterpreter)
         {
             short[] array = new short[] { 0, 1, -1, short.MinValue, short.MaxValue };
@@ -63,7 +64,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckUIntDivideTest(bool useInterpreter)
         {
             uint[] array = new uint[] { 0, 1, uint.MaxValue };
@@ -76,7 +78,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckIntDivideTest(bool useInterpreter)
         {
             int[] array = new int[] { 0, 1, -1, int.MinValue, int.MaxValue };
@@ -89,7 +92,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckULongDivideTest(bool useInterpreter)
         {
             ulong[] array = new ulong[] { 0, 1, ulong.MaxValue };
@@ -102,7 +106,8 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
-        [Theory, ClassData(typeof(CompilationTypes))]
+        [Theory]
+        [ClassData(typeof(CompilationTypes))]
         public static void CheckLongDivideTest(bool useInterpreter)
         {
             long[] array = new long[] { 0, 1, -1, long.MinValue, long.MaxValue };
@@ -214,7 +219,7 @@ namespace System.Linq.Expressions.Tests
             if (b == 0)
                 Assert.Throws<DivideByZeroException>(() => f());
             else
-                Assert.Equal((short)(a / b), f());
+                Assert.Equal(unchecked((short)(a / b)), f());
         }
 
         private static void VerifyUIntDivide(uint a, uint b, bool useInterpreter)
@@ -342,19 +347,19 @@ namespace System.Linq.Expressions.Tests
             Expression exp = Expression.Divide(Expression.Constant(0), Expression.Constant(0));
             Assert.False(exp.CanReduce);
             Assert.Same(exp, exp.Reduce());
-            Assert.Throws<ArgumentException>(null, () => exp.ReduceAndCheck());
+            AssertExtensions.Throws<ArgumentException>(null, () => exp.ReduceAndCheck());
         }
 
         [Fact]
         public static void ThrowsOnLeftNull()
         {
-            Assert.Throws<ArgumentNullException>("left", () => Expression.Divide(null, Expression.Constant("")));
+            AssertExtensions.Throws<ArgumentNullException>("left", () => Expression.Divide(null, Expression.Constant("")));
         }
 
         [Fact]
         public static void ThrowsOnRightNull()
         {
-            Assert.Throws<ArgumentNullException>("right", () => Expression.Divide(Expression.Constant(""), null));
+            AssertExtensions.Throws<ArgumentNullException>("right", () => Expression.Divide(Expression.Constant(""), null));
         }
 
         private static class Unreadable<T>
@@ -369,14 +374,21 @@ namespace System.Linq.Expressions.Tests
         public static void ThrowsOnLeftUnreadable()
         {
             Expression value = Expression.Property(null, typeof(Unreadable<int>), "WriteOnly");
-            Assert.Throws<ArgumentException>("left", () => Expression.Divide(value, Expression.Constant(1)));
+            AssertExtensions.Throws<ArgumentException>("left", () => Expression.Divide(value, Expression.Constant(1)));
         }
 
         [Fact]
         public static void ThrowsOnRightUnreadable()
         {
             Expression value = Expression.Property(null, typeof(Unreadable<int>), "WriteOnly");
-            Assert.Throws<ArgumentException>("right", () => Expression.Divide(Expression.Constant(1), value));
+            AssertExtensions.Throws<ArgumentException>("right", () => Expression.Divide(Expression.Constant(1), value));
+        }
+
+        [Fact]
+        public static void ToStringTest()
+        {
+            BinaryExpression e = Expression.Divide(Expression.Parameter(typeof(int), "a"), Expression.Parameter(typeof(int), "b"));
+            Assert.Equal("(a / b)", e.ToString());
         }
     }
 }

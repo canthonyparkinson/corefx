@@ -2,8 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics;
 using System.Globalization;
-using System.Linq;
 using System.Reflection;
 
 namespace System.ComponentModel.DataAnnotations
@@ -71,7 +71,7 @@ namespace System.ComponentModel.DataAnnotations
 
         #region Internal Properties
         /// <summary>
-        /// Gets or sets and the default error message string.
+        /// Sets the default error message string.
         /// This message will be used if the user has not set <see cref="ErrorMessage"/>
         /// or the <see cref="ErrorMessageResourceType"/> and <see cref="ErrorMessageResourceName"/> pair.
         /// This property was added after the public contract for DataAnnotations was created.
@@ -79,10 +79,6 @@ namespace System.ComponentModel.DataAnnotations
         /// </summary>
         internal string DefaultErrorMessage
         {
-            get
-            {
-                return _defaultErrorMessage;
-            }
             set
             {
                 _defaultErrorMessage = value;
@@ -119,17 +115,14 @@ namespace System.ComponentModel.DataAnnotations
         ///     <see cref="ValidationContext" /> to perform validation.
         ///     Base class returns false. Override in child classes as appropriate.
         /// </summary>
-        public virtual bool RequiresValidationContext
-        {
-            get { return false; }
-        }
+        public virtual bool RequiresValidationContext => false;
 
         #endregion
 
         #region Public Properties
 
         /// <summary>
-        ///     Gets or sets and explicit error message string.
+        ///     Gets or sets the explicit error message string.
         /// </summary>
         /// <value>
         ///     This property is intended to be used for non-localizable error messages.  Use
@@ -137,12 +130,9 @@ namespace System.ComponentModel.DataAnnotations
         /// </value>
         public string ErrorMessage
         {
-            get
-            {
-                // If _errorMessage is not set, return the default. This is done to preserve
-                // behavior prior to the fix where ErrorMessage showed the non-null message to use.
-                return _errorMessage ?? _defaultErrorMessage;
-            }
+            // If _errorMessage is not set, return the default. This is done to preserve
+            // behavior prior to the fix where ErrorMessage showed the non-null message to use.
+            get => _errorMessage ?? _defaultErrorMessage;
             set
             {
                 _errorMessage = value;
@@ -167,7 +157,7 @@ namespace System.ComponentModel.DataAnnotations
         /// </value>
         public string ErrorMessageResourceName
         {
-            get { return _errorMessageResourceName; }
+            get => _errorMessageResourceName;
             set
             {
                 _errorMessageResourceName = value;
@@ -188,7 +178,7 @@ namespace System.ComponentModel.DataAnnotations
         /// </value>
         public Type ErrorMessageResourceType
         {
-            get { return _errorMessageResourceType; }
+            get => _errorMessageResourceType;
             set
             {
                 _errorMessageResourceType = value;
@@ -241,65 +231,50 @@ namespace System.ComponentModel.DataAnnotations
                 {
                     // Here if not using resource type/name -- the accessor is just the error message string,
                     // which we know is not empty to have gotten this far.
-                    _errorMessageResourceAccessor = delegate
-                    {
-                        // We captured error message to local in case it changes before accessor runs
-                        return localErrorMessage;
-                    };
+                    // We captured error message to local in case it changes before accessor runs
+                    _errorMessageResourceAccessor = () => localErrorMessage;
                 }
             }
         }
 
         private void SetResourceAccessorByPropertyLookup()
         {
-            if (_errorMessageResourceType != null && !string.IsNullOrEmpty(_errorMessageResourceName))
+            Debug.Assert(_errorMessageResourceType != null);
+            Debug.Assert(!string.IsNullOrEmpty(_errorMessageResourceName));
+            var property = _errorMessageResourceType
+                .GetTypeInfo().GetDeclaredProperty(_errorMessageResourceName);
+            if (property != null && !ValidationAttributeStore.IsStatic(property))
             {
-                var property = _errorMessageResourceType
-                    .GetTypeInfo().GetDeclaredProperty(_errorMessageResourceName);
-                if (property != null && !ValidationAttributeStore.IsStatic(property))
+                property = null;
+            }
+
+            if (property != null)
+            {
+                var propertyGetter = property.GetMethod;
+
+                // We only support internal and public properties
+                if (propertyGetter == null || (!propertyGetter.IsAssembly && !propertyGetter.IsPublic))
                 {
+                    // Set the property to null so the exception is thrown as if the property wasn't found
                     property = null;
                 }
-
-                if (property != null)
-                {
-                    var propertyGetter = property.GetMethod;
-
-                    // We only support internal and public properties
-                    if (propertyGetter == null || (!propertyGetter.IsAssembly && !propertyGetter.IsPublic))
-                    {
-                        // Set the property to null so the exception is thrown as if the property wasn't found
-                        property = null;
-                    }
-                }
-
-                if (property == null)
-                {
-                    throw new InvalidOperationException(
-                        string.Format(
-                            CultureInfo.CurrentCulture,
-                            SR.ValidationAttribute_ResourceTypeDoesNotHaveProperty,
-                            _errorMessageResourceType.FullName,
-                            _errorMessageResourceName));
-                }
-
-                if (property.PropertyType != typeof(string))
-                {
-                    throw new InvalidOperationException(
-                        string.Format(
-                            CultureInfo.CurrentCulture,
-                            SR.ValidationAttribute_ResourcePropertyNotStringType,
-                            property.Name,
-                            _errorMessageResourceType.FullName));
-                }
-
-                _errorMessageResourceAccessor = delegate { return (string)property.GetValue(null, null); };
             }
-            else
+
+            if (property == null)
             {
-                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture,
-                    SR.ValidationAttribute_NeedBothResourceTypeAndResourceName));
+                throw new InvalidOperationException(SR.Format(SR.ValidationAttribute_ResourceTypeDoesNotHaveProperty,
+                                                    _errorMessageResourceType.FullName,
+                                                    _errorMessageResourceName));
             }
+
+            if (property.PropertyType != typeof(string))
+            {
+                throw new InvalidOperationException(SR.Format(SR.ValidationAttribute_ResourcePropertyNotStringType,
+                                                    property.Name,
+                                                    _errorMessageResourceType.FullName));
+            }
+
+            _errorMessageResourceAccessor = () => (string)property.GetValue(null, null);
         }
 
         #endregion
@@ -325,10 +300,8 @@ namespace System.ComponentModel.DataAnnotations
         /// <param name="name">The user-visible name to include in the formatted message.</param>
         /// <returns>The localized string describing the validation error</returns>
         /// <exception cref="InvalidOperationException"> is thrown if the current attribute is malformed.</exception>
-        public virtual string FormatErrorMessage(string name)
-        {
-            return string.Format(CultureInfo.CurrentCulture, ErrorMessageString, name);
-        }
+        public virtual string FormatErrorMessage(string name) =>
+            string.Format(CultureInfo.CurrentCulture, ErrorMessageString, name);
 
         /// <summary>
         ///     Gets the value indicating whether or not the specified <paramref name="value" /> is valid

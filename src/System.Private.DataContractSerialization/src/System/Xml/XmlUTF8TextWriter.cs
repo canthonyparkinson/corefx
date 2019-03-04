@@ -3,13 +3,12 @@
 // See the LICENSE file in the project root for more information.
 
 using System.IO;
-using System.Security;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace System.Xml
 {
-    internal interface IXmlTextWriterInitializer
+    public interface IXmlTextWriterInitializer
     {
         void SetOutput(Stream stream, Encoding encoding, bool ownsStream);
     }
@@ -35,6 +34,11 @@ namespace System.Xml
             }
             _writer.SetOutput(stream, ownsStream, encoding);
             SetOutput(_writer);
+        }
+
+        protected override XmlSigningNodeWriter CreateSigningNodeWriter()
+        {
+            return new XmlSigningNodeWriter(true);
         }
     }
 
@@ -109,14 +113,6 @@ namespace System.Xml
             base.SetOutput(stream, ownsStream, utf8Encoding);
             _encoding = encoding;
             _inAttribute = false;
-        }
-
-        public Encoding Encoding
-        {
-            get
-            {
-                return _encoding;
-            }
         }
 
         private byte[] GetCharEntityBuffer()
@@ -436,8 +432,7 @@ namespace System.Xml
             WriteEscapedText(s.Value);
         }
 
-        [SecuritySafeCritical]
-        unsafe public override void WriteEscapedText(string s)
+        public unsafe override void WriteEscapedText(string s)
         {
             int count = s.Length;
             if (count > 0)
@@ -449,8 +444,7 @@ namespace System.Xml
             }
         }
 
-        [SecuritySafeCritical]
-        unsafe public override void WriteEscapedText(char[] s, int offset, int count)
+        public unsafe override void WriteEscapedText(char[] s, int offset, int count)
         {
             if (count > 0)
             {
@@ -461,7 +455,6 @@ namespace System.Xml
             }
         }
 
-        [SecurityCritical]
         private unsafe void UnsafeWriteEscapedText(char* chars, int count)
         {
             bool[] isEscapedChar = (_inAttribute ? _isEscapedAttributeChar : _isEscapedElementChar);
@@ -522,8 +515,7 @@ namespace System.Xml
             WriteUTF8Chars(chars, offset, count);
         }
 
-        [SecuritySafeCritical]
-        unsafe public override void WriteText(char[] chars, int offset, int count)
+        public unsafe override void WriteText(char[] chars, int offset, int count)
         {
             if (count > 0)
             {

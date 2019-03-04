@@ -22,7 +22,7 @@ namespace System.Reflection.Metadata
         /// <exception cref="BadImageFormatException">The body is not found in the metadata or is invalid.</exception>
         /// <exception cref="InvalidOperationException">Section where the method is stored is not available.</exception>
         /// <exception cref="IOException">IO error while reading from the underlying stream.</exception>
-        public static unsafe MethodBodyBlock GetMethodBody(this PEReader peReader, int relativeVirtualAddress)
+        public static MethodBodyBlock GetMethodBody(this PEReader peReader, int relativeVirtualAddress)
         {
             if (peReader == null)
             {
@@ -36,8 +36,7 @@ namespace System.Reflection.Metadata
             }
 
             // Call to validating public BlobReader constructor is by design -- we need to throw PlatformNotSupported on big-endian architecture.
-            var blobReader = new BlobReader(block.Pointer, block.Length);
-            return MethodBodyBlock.Create(blobReader);
+            return MethodBodyBlock.Create(block.GetReader());
         }
 
         /// <summary>
@@ -72,7 +71,7 @@ namespace System.Reflection.Metadata
         /// Gets a <see cref="MetadataReader"/> from a <see cref="PEReader"/>.
         /// </summary>
         /// <remarks>
-        /// The caller must keep the <see cref="PEReader"/> alive and undisposed throughout the lifetime of the metadata reader.
+        /// The caller must keep the <see cref="PEReader"/> undisposed throughout the lifetime of the metadata reader.
         /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="peReader"/> is null</exception>
         /// <exception cref="ArgumentException">The encoding of <paramref name="utf8Decoder"/> is not <see cref="UTF8Encoding"/>.</exception>
@@ -86,7 +85,7 @@ namespace System.Reflection.Metadata
             }
 
             var metadata = peReader.GetMetadata();
-            return new MetadataReader(metadata.Pointer, metadata.Length, options, utf8Decoder);
+            return new MetadataReader(metadata.Pointer, metadata.Length, options, utf8Decoder, memoryOwner: peReader);
         }
     }
 }

@@ -23,26 +23,32 @@ namespace System.Collections.Tests
             return new LinkedList<string>();
         }
 
-        protected override bool Enumerator_Current_UndefinedOperation_Throws { get { return true; } }
+        protected override bool Enumerator_Current_UndefinedOperation_Throws => true;
 
         /// <summary>
         /// Returns a set of ModifyEnumerable delegates that modify the enumerable passed to them.
         /// </summary>
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations)
         {
-            get
+            if ((operations & ModifyOperation.Add) == ModifyOperation.Add)
             {
-                yield return (IEnumerable enumerable) => {
+                yield return (IEnumerable enumerable) =>
+                {
                     LinkedList<string> casted = ((LinkedList<string>)enumerable);
                     casted.AddFirst(CreateT(4531));
                     return true;
                 };
-                yield return (IEnumerable enumerable) => {
+                yield return (IEnumerable enumerable) =>
+                {
                     LinkedList<string> casted = ((LinkedList<string>)enumerable);
                     casted.AddLast(CreateT(4531));
                     return true;
                 };
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Remove) == ModifyOperation.Remove)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     LinkedList<string> casted = ((LinkedList<string>)enumerable);
                     if (casted.Count > 0)
                     {
@@ -51,7 +57,8 @@ namespace System.Collections.Tests
                     }
                     return false;
                 };
-                yield return (IEnumerable enumerable) => {
+                yield return (IEnumerable enumerable) =>
+                {
                     LinkedList<string> casted = ((LinkedList<string>)enumerable);
                     if (casted.Count > 0)
                     {
@@ -60,7 +67,11 @@ namespace System.Collections.Tests
                     }
                     return false;
                 };
-                yield return (IEnumerable enumerable) => {
+            }
+            if ((operations & ModifyOperation.Clear) == ModifyOperation.Clear)
+            {
+                yield return (IEnumerable enumerable) =>
+                {
                     LinkedList<string> casted = ((LinkedList<string>)enumerable);
                     if (casted.Count > 0)
                     {

@@ -2,10 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Linq;
-using System.Collections;
-using System.Diagnostics;
-using Xunit;
 using System.Collections.Generic;
 
 namespace System.Collections.Tests
@@ -29,8 +25,19 @@ namespace System.Collections.Tests
             HashSet,
             SortedSet,
             List,
-            Queue
+            Queue,
+            Lazy,
         };
+
+        [Flags]
+        public enum ModifyOperation
+        {
+            None = 0,
+            Add = 1,
+            Insert = 2,
+            Remove = 4,
+            Clear = 8
+        }
 
         #endregion
     }

@@ -23,13 +23,12 @@ namespace System.ComponentModel.DataAnnotations
                 return true;
             }
 
-            var valueAsString = value as string;
-            if (valueAsString == null)
+            if (!(value is string valueAsString))
             {
                 return false;
             }
 
-            // only return true is there is only 1 '@' character
+            // only return true if there is only 1 '@' character
             // and it is neither the first nor the last character
             bool found = false;
             for (int i = 0; i < valueAsString.Length; i++)

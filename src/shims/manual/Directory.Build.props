@@ -1,0 +1,37 @@
+<Project>
+  <PropertyGroup>
+    <PackageConfigurations>
+      netcoreapp2.0;
+    </PackageConfigurations>
+    <BuildConfigurations>
+      $(PackageConfigurations);
+      netcoreapp;
+      netcoreappaot;
+      uap;
+    </BuildConfigurations>
+    <IsNETCoreApp>true</IsNETCoreApp>
+    <IsUAP>true</IsUAP>
+  </PropertyGroup>
+  <!-- need to by-pass the Directory.Build.props in the shims directory for this project -->
+  <Import Project="..\..\Directory.Build.props" />
+  <PropertyGroup>
+    <_RuntimePath Condition="'$(TargetGroup)' == 'netcoreapp' OR '$(TargetGroup)' == 'uap' OR '$(TargetGroup)' == 'netcoreappaot'">$(RuntimePath)</_RuntimePath>
+    <_RuntimePath Condition="'$(TargetGroup)' == 'netcoreapp2.0'">$(ShimsTargetRuntimeRoot)netcoreapp2.0/</_RuntimePath>
+    <AssemblyVersion>4.0.0.0</AssemblyVersion>
+    <StrongNameKeyId>ECMA</StrongNameKeyId>
+    <IsPartialFacadeAssembly>true</IsPartialFacadeAssembly>
+    <GenFacadesForceZeroVersionSeeds>true</GenFacadesForceZeroVersionSeeds>
+    <GenFacadesIgnoreMissingTypes>true</GenFacadesIgnoreMissingTypes>
+    <IsRuntimeAssembly>true</IsRuntimeAssembly>
+    <HasMatchingContract>true</HasMatchingContract>
+    <IncludeDefaultReferences>false</IncludeDefaultReferences>
+    <ContractAssemblyPath>$(NetFxRefPath)$(MSBuildProjectName).dll</ContractAssemblyPath>
+    <DefineConstants Condition="'$(TargetsNetCoreApp)' == 'true'">$(DefineConstants);netcoreapp</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ReferencePath
+      Include="$(_RuntimePath)System.*.dll;$(_RuntimePath)Microsoft.Win32.*.dll"
+      Exclude="$(_RuntimePath)System.dll;$(_RuntimePath)System.Data.dll" />
+  </ItemGroup>
+</Project>

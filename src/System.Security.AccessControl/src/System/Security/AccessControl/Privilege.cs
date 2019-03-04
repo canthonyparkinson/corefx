@@ -16,15 +16,15 @@ using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security.Principal;
 using System.Threading;
-using System.Runtime.Versioning;
-using System.Diagnostics.Contracts;
 using CultureInfo = System.Globalization.CultureInfo;
 using FCall = System.Security.Principal.Win32;
-using Luid = Interop.mincore.LUID;
+using Luid = Interop.Advapi32.LUID;
 
 namespace System.Security.AccessControl
 {
@@ -35,7 +35,7 @@ namespace System.Security.AccessControl
     internal sealed class Privilege
     {
         [ThreadStatic]
-        private static TlsContents tlsSlotData;
+        private static TlsContents t_tlsSlotData;
         private static Dictionary<Luid, string> privileges = new Dictionary<Luid, string>();
         private static Dictionary<string, Luid> luids = new Dictionary<string, Luid>();
         private static ReaderWriterLockSlim privilegeLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
@@ -109,19 +109,19 @@ namespace System.Security.AccessControl
                 {
                     privilegeLock.ExitReadLock();
 
-                    if (false == Interop.mincore.LookupPrivilegeValue(null, privilege, out luid))
+                    if (false == Interop.Advapi32.LookupPrivilegeValue(null, privilege, out luid))
                     {
                         int error = Marshal.GetLastWin32Error();
 
-                        if (error == Interop.mincore.Errors.ERROR_NOT_ENOUGH_MEMORY)
+                        if (error == Interop.Errors.ERROR_NOT_ENOUGH_MEMORY)
                         {
                             throw new OutOfMemoryException();
                         }
-                        else if (error == Interop.mincore.Errors.ERROR_ACCESS_DENIED)
+                        else if (error == Interop.Errors.ERROR_ACCESS_DENIED)
                         {
                             throw new UnauthorizedAccessException();
                         }
-                        else if (error == Interop.mincore.Errors.ERROR_NO_SUCH_PRIVILEGE)
+                        else if (error == Interop.Errors.ERROR_NO_SUCH_PRIVILEGE)
                         {
                             throw new ArgumentException(
                                 SR.Format(SR.Argument_InvalidPrivilegeName,
@@ -129,7 +129,7 @@ namespace System.Security.AccessControl
                         }
                         else
                         {
-                            Contract.Assert(false, string.Format(CultureInfo.InvariantCulture, "LookupPrivilegeValue() failed with unrecognized error code {0}", error));
+                            System.Diagnostics.Debug.Assert(false, string.Format(CultureInfo.InvariantCulture, "LookupPrivilegeValue() failed with unrecognized error code {0}", error));
                             throw new InvalidOperationException();
                         }
                     }
@@ -184,8 +184,8 @@ namespace System.Security.AccessControl
                         if (processHandle.IsInvalid)
                         {
                             SafeTokenHandle localProcessHandle;
-                            if (false == Interop.mincore.OpenProcessToken(
-                                            Interop.mincore.GetCurrentProcess(),
+                            if (false == Interop.Advapi32.OpenProcessToken(
+                                            Interop.Kernel32.GetCurrentProcess(),
                                             TokenAccessLevels.Duplicate,
                                             out localProcessHandle))
                             {
@@ -223,21 +223,21 @@ namespace System.Security.AccessControl
                             {
                                 this.threadHandle = threadHandleBefore;
 
-                                if (error != Interop.mincore.Errors.ERROR_NO_TOKEN)
+                                if (error != Interop.Errors.ERROR_NO_TOKEN)
                                 {
                                     success = false;
                                 }
 
-                                Contract.Assert(this.isImpersonating == false, "Incorrect isImpersonating state");
+                                System.Diagnostics.Debug.Assert(this.isImpersonating == false, "Incorrect isImpersonating state");
 
                                 if (success == true)
                                 {
                                     error = 0;
-                                    if (false == Interop.mincore.DuplicateTokenEx(
+                                    if (false == Interop.Advapi32.DuplicateTokenEx(
                                                     processHandle,
                                                     TokenAccessLevels.Impersonate | TokenAccessLevels.Query | TokenAccessLevels.AdjustPrivileges,
                                                     IntPtr.Zero,
-                                                    Interop.mincore.SECURITY_IMPERSONATION_LEVEL.SecurityImpersonation,
+                                                    Interop.Advapi32.SECURITY_IMPERSONATION_LEVEL.SecurityImpersonation,
                                                     System.Security.Principal.TokenType.TokenImpersonation,
                                                     ref this.threadHandle))
                                     {
@@ -281,18 +281,18 @@ namespace System.Security.AccessControl
                     }
                 }
 
-                if (error == Interop.mincore.Errors.ERROR_NOT_ENOUGH_MEMORY)
+                if (error == Interop.Errors.ERROR_NOT_ENOUGH_MEMORY)
                 {
                     throw new OutOfMemoryException();
                 }
-                else if (error == Interop.mincore.Errors.ERROR_ACCESS_DENIED ||
-                    error == Interop.mincore.Errors.ERROR_CANT_OPEN_ANONYMOUS)
+                else if (error == Interop.Errors.ERROR_ACCESS_DENIED ||
+                    error == Interop.Errors.ERROR_CANT_OPEN_ANONYMOUS)
                 {
                     throw new UnauthorizedAccessException();
                 }
                 else if (error != 0)
                 {
-                    Contract.Assert(false, string.Format(CultureInfo.InvariantCulture, "WindowsIdentity.GetCurrentThreadToken() failed with unrecognized error code {0}", error));
+                    System.Diagnostics.Debug.Assert(false, string.Format(CultureInfo.InvariantCulture, "WindowsIdentity.GetCurrentThreadToken() failed with unrecognized error code {0}", error));
                     throw new InvalidOperationException();
                 }
             }
@@ -329,7 +329,7 @@ namespace System.Security.AccessControl
 
                 if (this.isImpersonating)
                 {
-                    Interop.mincore.RevertToSelf();
+                    Interop.Advapi32.RevertToSelf();
                 }
 
                 this.disposed = true;
@@ -365,7 +365,6 @@ namespace System.Security.AccessControl
 
             public SafeTokenHandle ThreadHandle
             {
-                [System.Security.SecurityCritical]  // auto-generated
                 get
                 { return this.threadHandle; }
             }
@@ -385,7 +384,6 @@ namespace System.Security.AccessControl
             {
                 throw new ArgumentNullException(nameof(privilegeName));
             }
-            Contract.EndContractBlock();
 
             this.luid = LuidFromPrivilege(privilegeName);
         }
@@ -397,7 +395,7 @@ namespace System.Security.AccessControl
 
         ~Privilege()
         {
-            Contract.Assert(!this.needToRevert, "Must revert privileges that you alter!");
+            System.Diagnostics.Debug.Assert(!this.needToRevert, "Must revert privileges that you alter!");
 
             if (this.needToRevert)
             {
@@ -418,8 +416,7 @@ namespace System.Security.AccessControl
 
         #endregion
 
-        //      [SecurityPermission( SecurityAction.Demand, TogglePrivileges=true )]
-        private void ToggleState(bool enable)
+        private unsafe void ToggleState(bool enable)
         {
             int error = 0;
 
@@ -462,46 +459,43 @@ namespace System.Security.AccessControl
                     // Retrieve TLS state
                     //
 
-                    this.tlsContents = tlsSlotData;
+                    this.tlsContents = t_tlsSlotData;
 
                     if (this.tlsContents == null)
                     {
                         this.tlsContents = new TlsContents();
-                        tlsSlotData = this.tlsContents;
+                        t_tlsSlotData = this.tlsContents;
                     }
                     else
                     {
                         this.tlsContents.IncrementReferenceCount();
                     }
 
-                    Interop.mincore.LUID_AND_ATTRIBUTES luidAndAttrs = new Interop.mincore.LUID_AND_ATTRIBUTES();
-                    luidAndAttrs.Luid = this.luid;
-                    luidAndAttrs.Attributes = enable ? Interop.mincore.SEPrivileges.SE_PRIVILEGE_ENABLED : Interop.mincore.SEPrivileges.SE_PRIVILEGE_DISABLED;
-
-                    Interop.mincore.TOKEN_PRIVILEGE newState = new Interop.mincore.TOKEN_PRIVILEGE();
+                    Interop.Advapi32.TOKEN_PRIVILEGE newState;
                     newState.PrivilegeCount = 1;
-                    newState.Privileges[0] = luidAndAttrs;
+                    newState.Privileges.Luid = this.luid;
+                    newState.Privileges.Attributes = enable ? Interop.Advapi32.SEPrivileges.SE_PRIVILEGE_ENABLED : Interop.Advapi32.SEPrivileges.SE_PRIVILEGE_DISABLED;
 
-                    Interop.mincore.TOKEN_PRIVILEGE previousState = new Interop.mincore.TOKEN_PRIVILEGE();
+                    Interop.Advapi32.TOKEN_PRIVILEGE previousState = new Interop.Advapi32.TOKEN_PRIVILEGE();
                     uint previousSize = 0;
 
                     //
                     // Place the new privilege on the thread token and remember the previous state.
                     //
 
-                    if (false == Interop.mincore.AdjustTokenPrivileges(
+                    if (!Interop.Advapi32.AdjustTokenPrivileges(
                                       this.tlsContents.ThreadHandle,
                                       false,
-                                      ref newState,
-                                      (uint)Marshal.SizeOf(previousState),
-                                      ref previousState,
-                                      ref previousSize))
+                                      &newState,
+                                      (uint)sizeof(Interop.Advapi32.TOKEN_PRIVILEGE),
+                                      &previousState,
+                                      &previousSize))
                     {
                         error = Marshal.GetLastWin32Error();
                     }
-                    else if (Interop.mincore.Errors.ERROR_NOT_ALL_ASSIGNED == Marshal.GetLastWin32Error())
+                    else if (Interop.Errors.ERROR_NOT_ALL_ASSIGNED == Marshal.GetLastWin32Error())
                     {
-                        error = Interop.mincore.Errors.ERROR_NOT_ALL_ASSIGNED;
+                        error = Interop.Errors.ERROR_NOT_ALL_ASSIGNED;
                     }
                     else
                     {
@@ -509,7 +503,7 @@ namespace System.Security.AccessControl
                         // This is the initial state that revert will have to go back to
                         //
 
-                        this.initialState = ((previousState.Privileges[0].Attributes & Interop.mincore.SEPrivileges.SE_PRIVILEGE_ENABLED) != 0);
+                        this.initialState = ((previousState.Privileges.Attributes & Interop.Advapi32.SEPrivileges.SE_PRIVILEGE_ENABLED) != 0);
 
                         //
                         // Remember whether state has changed at all
@@ -533,28 +527,27 @@ namespace System.Security.AccessControl
                 }
             }
 
-            if (error == Interop.mincore.Errors.ERROR_NOT_ALL_ASSIGNED)
+            if (error == Interop.Errors.ERROR_NOT_ALL_ASSIGNED)
             {
                 throw new PrivilegeNotHeldException(privileges[this.luid]);
             }
-            if (error == Interop.mincore.Errors.ERROR_NOT_ENOUGH_MEMORY)
+            if (error == Interop.Errors.ERROR_NOT_ENOUGH_MEMORY)
             {
                 throw new OutOfMemoryException();
             }
-            else if (error == Interop.mincore.Errors.ERROR_ACCESS_DENIED ||
-                error == Interop.mincore.Errors.ERROR_CANT_OPEN_ANONYMOUS)
+            else if (error == Interop.Errors.ERROR_ACCESS_DENIED ||
+                error == Interop.Errors.ERROR_CANT_OPEN_ANONYMOUS)
             {
                 throw new UnauthorizedAccessException();
             }
             else if (error != 0)
             {
-                Contract.Assert(false, string.Format(CultureInfo.InvariantCulture, "AdjustTokenPrivileges() failed with unrecognized error code {0}", error));
+                System.Diagnostics.Debug.Assert(false, string.Format(CultureInfo.InvariantCulture, "AdjustTokenPrivileges() failed with unrecognized error code {0}", error));
                 throw new InvalidOperationException();
             }
         }
 
-        //      [SecurityPermission( SecurityAction.Demand, TogglePrivileges=true )]
-        public void Revert()
+        public unsafe void Revert()
         {
             int error = 0;
 
@@ -595,24 +588,18 @@ namespace System.Security.AccessControl
                         (this.tlsContents.ReferenceCountValue > 1 ||
                           !this.tlsContents.IsImpersonating))
                     {
-                        Interop.mincore.LUID_AND_ATTRIBUTES luidAndAttrs = new Interop.mincore.LUID_AND_ATTRIBUTES();
-                        luidAndAttrs.Luid = this.luid;
-                        luidAndAttrs.Attributes = (this.initialState ? Interop.mincore.SEPrivileges.SE_PRIVILEGE_ENABLED : Interop.mincore.SEPrivileges.SE_PRIVILEGE_DISABLED);
-
-                        Interop.mincore.TOKEN_PRIVILEGE newState = new Interop.mincore.TOKEN_PRIVILEGE();
+                        Interop.Advapi32.TOKEN_PRIVILEGE newState;
                         newState.PrivilegeCount = 1;
-                        newState.Privileges[0] = luidAndAttrs;
+                        newState.Privileges.Luid = this.luid;
+                        newState.Privileges.Attributes = (this.initialState ? Interop.Advapi32.SEPrivileges.SE_PRIVILEGE_ENABLED : Interop.Advapi32.SEPrivileges.SE_PRIVILEGE_DISABLED);
 
-                        Interop.mincore.TOKEN_PRIVILEGE previousState = new Interop.mincore.TOKEN_PRIVILEGE();
-                        uint previousSize = 0;
-
-                        if (false == Interop.mincore.AdjustTokenPrivileges(
+                        if (!Interop.Advapi32.AdjustTokenPrivileges(
                                           this.tlsContents.ThreadHandle,
                                           false,
-                                          ref newState,
-                                          (uint)Marshal.SizeOf(previousState),
-                                          ref previousState,
-                                          ref previousSize))
+                                          &newState,
+                                          0,
+                                          null,
+                                          null))
                         {
                             error = Marshal.GetLastWin32Error();
                             success = false;
@@ -628,17 +615,17 @@ namespace System.Security.AccessControl
                 }
             }
 
-            if (error == Interop.mincore.Errors.ERROR_NOT_ENOUGH_MEMORY)
+            if (error == Interop.Errors.ERROR_NOT_ENOUGH_MEMORY)
             {
                 throw new OutOfMemoryException();
             }
-            else if (error == Interop.mincore.Errors.ERROR_ACCESS_DENIED)
+            else if (error == Interop.Errors.ERROR_ACCESS_DENIED)
             {
                 throw new UnauthorizedAccessException();
             }
             else if (error != 0)
             {
-                Contract.Assert(false, string.Format(CultureInfo.InvariantCulture, "AdjustTokenPrivileges() failed with unrecognized error code {0}", error));
+                System.Diagnostics.Debug.Assert(false, string.Format(CultureInfo.InvariantCulture, "AdjustTokenPrivileges() failed with unrecognized error code {0}", error));
                 throw new InvalidOperationException();
             }
         }
@@ -649,7 +636,6 @@ namespace System.Security.AccessControl
             {
                 throw new ArgumentNullException( "helper" );
             }
-            Contract.EndContractBlock();
             
             Privilege p = new Privilege( privilege );
 
@@ -684,7 +670,7 @@ namespace System.Security.AccessControl
                 if (0 == this.tlsContents.DecrementReferenceCount())
                 {
                     this.tlsContents = null;
-                    tlsSlotData = null;
+                    t_tlsSlotData = null;
                 }
             }
         }

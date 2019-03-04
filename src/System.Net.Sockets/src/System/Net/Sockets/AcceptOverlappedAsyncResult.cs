@@ -2,22 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.Net;
-using System.Runtime.InteropServices;
-using System.Threading;
-using Microsoft.Win32;
-
 namespace System.Net.Sockets
 {
     // AcceptOverlappedAsyncResult - used to take care of storage for async Socket BeginAccept call.
-    internal partial class AcceptOverlappedAsyncResult : BaseOverlappedAsyncResult
+    internal sealed partial class AcceptOverlappedAsyncResult : BaseOverlappedAsyncResult
     {
-        private int _localBytesTransferred;
         private Socket _listenSocket;
         private byte[] _buffer;
 
-        internal AcceptOverlappedAsyncResult(Socket listenSocket, Object asyncState, AsyncCallback asyncCallback) :
+        internal AcceptOverlappedAsyncResult(Socket listenSocket, object asyncState, AsyncCallback asyncCallback) :
             base(listenSocket, asyncState, asyncCallback)
         {
             _listenSocket = listenSocket;
@@ -35,7 +28,7 @@ namespace System.Net.Sockets
         {
             get
             {
-                return _localBytesTransferred;
+                return _numBytes;
             }
         }
     }

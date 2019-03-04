@@ -6,29 +6,19 @@ using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
 {
-    public class ParallelTransactionsTest
+    public static class ParallelTransactionsTest
     {
         #region <<Basic Parallel Test>>
-        [Fact]
-        public void BasicParallelTest_ShouldThrowsUnsupported_Yukon()
+        [ConditionalFact(typeof(DataTestUtility),nameof(DataTestUtility.AreConnStringsSetup))]
+        public static void BasicParallelTest_shouldThrowsUnsupported()
         {
-            BasicParallelTest_shouldThrowsUnsupported(DataTestClass.SQL2005_Pubs);
-        }
-
-        [Fact]
-        public void BasicParallelTest_ShouldThrowsUnsupported_Katmai()
-        {
-            BasicParallelTest_shouldThrowsUnsupported(DataTestClass.SQL2008_Pubs);
-        }
-
-        private void BasicParallelTest_shouldThrowsUnsupported(string connectionString)
-        {
+            string connectionString = DataTestUtility.TcpConnStr;
             string expectedErrorMessage = SystemDataResourceManager.Instance.ADP_ParallelTransactionsNotSupported(typeof(SqlConnection).Name);
             string tempTableName = "";
             try
             {
                 tempTableName = CreateTempTable(connectionString);
-                DataTestClass.AssertThrowsWrapper<InvalidOperationException>(
+                DataTestUtility.AssertThrowsWrapper<InvalidOperationException>(
                     actionThatFails: () => { BasicParallelTest(connectionString, tempTableName); },
                     exceptionMessage: expectedErrorMessage);
             }
@@ -41,7 +31,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             }
         }
 
-        private void BasicParallelTest(string connectionString, string tempTableName)
+        private static void BasicParallelTest(string connectionString, string tempTableName)
         {
             using (var connection = new SqlConnection(connectionString))
             {
@@ -50,15 +40,15 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                 SqlTransaction trans2 = connection.BeginTransaction();
                 SqlTransaction trans3 = connection.BeginTransaction();
 
-                SqlCommand com1 = new SqlCommand("select top 1 au_id from " + tempTableName, connection);
+                SqlCommand com1 = new SqlCommand("select top 1 EmployeeID from " + tempTableName, connection);
                 com1.Transaction = trans1;
                 com1.ExecuteNonQuery();
 
-                SqlCommand com2 = new SqlCommand("select top 1 au_id from " + tempTableName, connection);
+                SqlCommand com2 = new SqlCommand("select top 1 EmployeeID from " + tempTableName, connection);
                 com2.Transaction = trans2;
                 com2.ExecuteNonQuery();
 
-                SqlCommand com3 = new SqlCommand("select top 1 au_id from " + tempTableName, connection);
+                SqlCommand com3 = new SqlCommand("select top 1 EmployeeID from " + tempTableName, connection);
                 com3.Transaction = trans3;
                 com3.ExecuteNonQuery();
 
@@ -75,26 +65,16 @@ namespace System.Data.SqlClient.ManualTesting.Tests
         #endregion
 
         #region <<MultipleExecutesInSameTransactionTest>>
-        [Fact]
-        public void MultipleExecutesInSameTransactionTest_ShouldThrowsUnsupported_Yukon()
+        [ConditionalFact(typeof(DataTestUtility),nameof(DataTestUtility.AreConnStringsSetup))]
+        public static void MultipleExecutesInSameTransactionTest_shouldThrowsUnsupported()
         {
-            MultipleExecutesInSameTransactionTest_shouldThrowsUnsupported(DataTestClass.SQL2005_Pubs);
-        }
-
-        [Fact]
-        public void MultipleExecutesInSameTransactionTest_ShouldThrowsUnsupported_Katmai()
-        {
-            MultipleExecutesInSameTransactionTest_shouldThrowsUnsupported(DataTestClass.SQL2008_Northwind);
-        }
-
-        private void MultipleExecutesInSameTransactionTest_shouldThrowsUnsupported(string connectionString)
-        {
+            string connectionString = DataTestUtility.TcpConnStr;
             string expectedErrorMessage = SystemDataResourceManager.Instance.ADP_ParallelTransactionsNotSupported(typeof(SqlConnection).Name);
             string tempTableName = "";
             try
             {
                 tempTableName = CreateTempTable(connectionString);
-                DataTestClass.AssertThrowsWrapper<InvalidOperationException>(
+                DataTestUtility.AssertThrowsWrapper<InvalidOperationException>(
                     actionThatFails: () => { MultipleExecutesInSameTransactionTest(connectionString, tempTableName); },
                     exceptionMessage: expectedErrorMessage);
             }
@@ -107,7 +87,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             }
         }
 
-        private void MultipleExecutesInSameTransactionTest(string connectionString, string tempTableName)
+        private static void MultipleExecutesInSameTransactionTest(string connectionString, string tempTableName)
         {
             using (var connection = new SqlConnection(connectionString))
             {
@@ -116,15 +96,15 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                 SqlTransaction trans2 = connection.BeginTransaction();
                 SqlTransaction trans3 = connection.BeginTransaction();
 
-                SqlCommand com1 = new SqlCommand("select top 1 au_id from " + tempTableName, connection);
+                SqlCommand com1 = new SqlCommand("select top 1 EmployeeID from " + tempTableName, connection);
                 com1.Transaction = trans1;
                 com1.ExecuteNonQuery();
 
-                SqlCommand com2 = new SqlCommand("select top 1 au_id from " + tempTableName, connection);
+                SqlCommand com2 = new SqlCommand("select top 1 EmployeeID from " + tempTableName, connection);
                 com2.Transaction = trans2;
                 com2.ExecuteNonQuery();
 
-                SqlCommand com3 = new SqlCommand("select top 1 au_id from " + tempTableName, connection);
+                SqlCommand com3 = new SqlCommand("select top 1 EmployeeID from " + tempTableName, connection);
                 com3.Transaction = trans3;
                 com3.ExecuteNonQuery();
 
@@ -136,7 +116,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                 com2.Dispose();
                 com3.Dispose();
 
-                SqlCommand com4 = new SqlCommand("select top 1 au_id from " + tempTableName, connection);
+                SqlCommand com4 = new SqlCommand("select top 1 EmployeeID from " + tempTableName, connection);
                 com4.Transaction = trans1;
                 SqlDataReader reader4 = com4.ExecuteReader();
                 reader4.Dispose();
@@ -147,23 +127,23 @@ namespace System.Data.SqlClient.ManualTesting.Tests
         }
         #endregion
 
-        private string CreateTempTable(string connectionString)
+        private static string CreateTempTable(string connectionString)
         {
             var uniqueKey = string.Format("{0}_{1}_{2}", Environment.GetEnvironmentVariable("ComputerName"), Environment.TickCount, Guid.NewGuid()).Replace("-", "_");
             var tempTableName = "TEMP_" + uniqueKey;
             using (var conn = new SqlConnection(connectionString))
             {
                 conn.Open();
-                SqlCommand cmd = new SqlCommand(string.Format("SELECT au_id, au_lname, au_fname, phone, address, city, state, zip, contract into {0} from pubs.dbo.authors", tempTableName), conn);
+                SqlCommand cmd = new SqlCommand(string.Format("SELECT EmployeeID, LastName, FirstName, Title, Address, City, Region, PostalCode, Country into {0} from Employees", tempTableName), conn);
                 cmd.ExecuteNonQuery();
-                cmd.CommandText = string.Format("alter table {0} add constraint au_id_{1} primary key (au_id)", tempTableName, uniqueKey);
+                cmd.CommandText = string.Format("alter table {0} add constraint EmployeeID_{1} primary key (EmployeeID)", tempTableName, uniqueKey);
                 cmd.ExecuteNonQuery();
             }
 
             return tempTableName;
         }
 
-        private void DropTempTable(string connectionString, string tempTableName)
+        private static void DropTempTable(string connectionString, string tempTableName)
         {
             using (SqlConnection con1 = new SqlConnection(connectionString))
             {

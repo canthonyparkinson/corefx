@@ -21,9 +21,9 @@ namespace System.Net
                 throw new ArgumentNullException(nameof(host));
             }
 
-            if (String.IsNullOrEmpty(host))
+            if (string.IsNullOrEmpty(host))
             {
-                throw new ArgumentException(SR.Format(SR.net_emptystringcall, "host"));
+                throw new ArgumentException(SR.Format(SR.net_emptystringcall, nameof(host)));
             }
 
             if (port < IPEndPoint.MinPort || port > IPEndPoint.MaxPort)

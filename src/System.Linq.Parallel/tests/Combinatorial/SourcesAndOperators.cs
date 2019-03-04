@@ -4,7 +4,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
+using System.Threading;
 using Xunit;
 
 namespace System.Linq.Parallel.Tests
@@ -30,9 +30,11 @@ namespace System.Linq.Parallel.Tests
             yield return Label("ParallelEnumerable.Range", (start, count, ignore) => ParallelEnumerable.Range(start, count));
             yield return Label("Enumerable.Range", (start, count, ignore) => Enumerable.Range(start, count).AsParallel());
             yield return Label("Array", (start, count, ignore) => Enumerable.Range(start, count).ToArray().AsParallel());
-            yield return Label("Partitioner", (start, count, ignore) => Partitioner.Create(Enumerable.Range(start, count).ToArray()).AsParallel());
             yield return Label("List", (start, count, ignore) => Enumerable.Range(start, count).ToList().AsParallel());
-            yield return Label("ReadOnlyCollection", (start, count, ignore) => new ReadOnlyCollection<int>(Enumerable.Range(start, count).ToList()).AsParallel());
+            yield return Label("Partitioner", (start, count, ignore) => Partitioner.Create(Enumerable.Range(start, count).ToArray()).AsParallel());
+
+            // PLINQ doesn't currently have any special code paths for readonly collections.  If it ever does, this should be uncommented.
+            // yield return Label("ReadOnlyCollection", (start, count, ignore) => new System.Collections.ReadOnlyCollection<int>(Enumerable.Range(start, count).ToList()).AsParallel());
         }
 
         private static IEnumerable<Labeled<Operation>> RangeSources()
@@ -116,6 +118,11 @@ namespace System.Linq.Parallel.Tests
 
             yield return new object[] { Label("Where", (start, count, source) => source(start - count / 2, count * 2).Where(x => x >= start && x < start + count)) };
             yield return new object[] { Label("Where-Index", (start, count, source) => source(start - count / 2, count * 2).Where((x, index) => x >= start && x < start + count)) };
+
+            yield return new object[] { Label("WithCancellation", (start, count, source) => source(start, count).WithCancellation(CancellationToken.None)) };
+            yield return new object[] { Label("WithDegreesOfParallelism", (start, count, source) => source(start, count).WithDegreeOfParallelism(Environment.ProcessorCount)) };
+            yield return new object[] { Label("WithExecutionMode", (start, count, source) => source(start, count).WithExecutionMode(ParallelExecutionMode.Default)) };
+            yield return new object[] { Label("WithMergeOptions", (start, count, source) => source(start, count).WithMergeOptions(ParallelMergeOptions.Default)) };
         }
 
         public static IEnumerable<object[]> UnaryUnorderedOperators()

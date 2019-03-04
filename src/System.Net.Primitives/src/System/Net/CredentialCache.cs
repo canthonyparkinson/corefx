@@ -21,32 +21,38 @@ namespace System.Net
         {
         }
 
-        public void Add(Uri uriPrefix, string authenticationType, NetworkCredential credential)
+        public void Add(Uri uriPrefix, string authType, NetworkCredential cred)
         {
             if (uriPrefix == null)
             {
                 throw new ArgumentNullException(nameof(uriPrefix));
             }
-            if (authenticationType == null)
+            if (authType == null)
             {
-                throw new ArgumentNullException(nameof(authenticationType));
+                throw new ArgumentNullException(nameof(authType));
+            }
+            
+            if ((cred is SystemNetworkCredential)
+                && !((string.Equals(authType, NegotiationInfoClass.NTLM, StringComparison.OrdinalIgnoreCase))
+                     || (string.Equals(authType, NegotiationInfoClass.Kerberos, StringComparison.OrdinalIgnoreCase))
+                     || (string.Equals(authType, NegotiationInfoClass.Negotiate, StringComparison.OrdinalIgnoreCase)))
+                )
+            {
+                throw new ArgumentException(SR.Format(SR.net_nodefaultcreds, authType), nameof(authType));
             }
 
             ++_version;
 
-            var key = new CredentialKey(uriPrefix, authenticationType);
+            var key = new CredentialKey(uriPrefix, authType);
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialCache::Add() Adding key:[" + key.ToString() + "], cred:[" + credential.Domain + "],[" + credential.UserName + "]");
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Adding key:[{key}], cred:[{cred.Domain}],[{cred.UserName}]");
 
             if (_cache == null)
             {
                 _cache = new Dictionary<CredentialKey, NetworkCredential>();
             }
 
-            _cache.Add(key, credential);
+            _cache.Add(key, cred);
         }
 
         public void Add(string host, int port, string authenticationType, NetworkCredential credential)
@@ -70,15 +76,21 @@ namespace System.Net
             {
                 throw new ArgumentOutOfRangeException(nameof(port));
             }
+            
+            if ((credential is SystemNetworkCredential)
+                && !((string.Equals(authenticationType, NegotiationInfoClass.NTLM, StringComparison.OrdinalIgnoreCase))
+                     || (string.Equals(authenticationType, NegotiationInfoClass.Kerberos, StringComparison.OrdinalIgnoreCase))
+                     || (string.Equals(authenticationType, NegotiationInfoClass.Negotiate, StringComparison.OrdinalIgnoreCase)))
+                )
+            {
+                throw new ArgumentException(SR.Format(SR.net_nodefaultcreds, authenticationType), nameof(authenticationType));
+            }
 
             ++_version;
 
             var key = new CredentialHostKey(host, port, authenticationType);
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialCache::Add() Adding key:[" + key.ToString() + "], cred:[" + credential.Domain + "],[" + credential.UserName + "]");
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Adding key:[{key}], cred:[{credential.Domain}],[{credential.UserName}]");
 
             if (_cacheForHosts == null)
             {
@@ -88,9 +100,9 @@ namespace System.Net
             _cacheForHosts.Add(key, credential);
         }
 
-        public void Remove(Uri uriPrefix, string authenticationType)
+        public void Remove(Uri uriPrefix, string authType)
         {
-            if (uriPrefix == null || authenticationType == null)
+            if (uriPrefix == null || authType == null)
             {
                 // These couldn't possibly have been inserted into
                 // the cache because of the test in Add().
@@ -99,22 +111,15 @@ namespace System.Net
 
             if (_cache == null)
             {
-                if (GlobalLog.IsEnabled)
-                {
-                    GlobalLog.Print("CredentialCache::Remove() Short-circuiting because the dictionary is null.");
-                }
-
+                if (NetEventSource.IsEnabled) NetEventSource.Info(this, "Short-circuiting because the dictionary is null.");
                 return;
             }
 
             ++_version;
 
-            var key = new CredentialKey(uriPrefix, authenticationType);
+            var key = new CredentialKey(uriPrefix, authType);
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialCache::Remove() Removing key:[" + key.ToString() + "]");
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Removing key:[{key}]");
 
             _cache.Remove(key);
         }
@@ -135,11 +140,7 @@ namespace System.Net
 
             if (_cacheForHosts == null)
             {
-                if (GlobalLog.IsEnabled)
-                {
-                    GlobalLog.Print("CredentialCache::Remove() Short-circuiting because the dictionary is null.");
-                }
-
+                if (NetEventSource.IsEnabled) NetEventSource.Info(this, "Short-circuiting because the dictionary is null.");
                 return;
             }
 
@@ -147,37 +148,27 @@ namespace System.Net
 
             var key = new CredentialHostKey(host, port, authenticationType);
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialCache::Remove() Removing key:[" + key.ToString() + "]");
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Removing key:[{key}]");
 
             _cacheForHosts.Remove(key);
         }
 
-        public NetworkCredential GetCredential(Uri uriPrefix, string authenticationType)
+        public NetworkCredential GetCredential(Uri uriPrefix, string authType)
         {
             if (uriPrefix == null)
             {
                 throw new ArgumentNullException(nameof(uriPrefix));
             }
-            if (authenticationType == null)
+            if (authType == null)
             {
-                throw new ArgumentNullException(nameof(authenticationType));
+                throw new ArgumentNullException(nameof(authType));
             }
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialCache::GetCredential(uriPrefix=\"" + uriPrefix + "\", authType=\"" + authenticationType + "\")");
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, uriPrefix, authType);
 
             if (_cache == null)
             {
-                if (GlobalLog.IsEnabled)
-                {
-                    GlobalLog.Print("CredentialCache::GetCredential short-circuiting because the dictionary is null.");
-                }
-
+                if (NetEventSource.IsEnabled) NetEventSource.Info(this, "CredentialCache::GetCredential short-circuiting because the dictionary is null.");
                 return null;
             }
 
@@ -190,7 +181,7 @@ namespace System.Net
                 CredentialKey key = pair.Key;
 
                 // Determine if this credential is applicable to the current Uri/AuthType
-                if (key.Match(uriPrefix, authenticationType))
+                if (key.Match(uriPrefix, authType))
                 {
                     int prefixLen = key.UriPrefixLength;
 
@@ -204,10 +195,7 @@ namespace System.Net
                 }
             }
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialCache::GetCredential returning " + ((mostSpecificMatch == null) ? "null" : "(" + mostSpecificMatch.UserName + ":" + mostSpecificMatch.Domain + ")"));
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Returning {(mostSpecificMatch == null ? "null" : "(" + mostSpecificMatch.UserName + ":" + mostSpecificMatch.Domain + ")")}");
 
             return mostSpecificMatch;
         }
@@ -231,18 +219,11 @@ namespace System.Net
                 throw new ArgumentOutOfRangeException(nameof(port));
             }
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialCache::GetCredential(host=\"" + host + ":" + port.ToString() + "\", authenticationType=\"" + authenticationType + "\")");
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, host, port, authenticationType);
 
             if (_cacheForHosts == null)
             {
-                if (GlobalLog.IsEnabled)
-                {
-                    GlobalLog.Print("CredentialCache::GetCredential short-circuiting because the dictionary is null.");
-                }
-
+                if (NetEventSource.IsEnabled) NetEventSource.Info(this, "CredentialCache::GetCredential short-circuiting because the dictionary is null.");
                 return null;
             }
 
@@ -251,10 +232,7 @@ namespace System.Net
             NetworkCredential match = null;
             _cacheForHosts.TryGetValue(key, out match);
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialCache::GetCredential returning " + ((match == null) ? "null" : "(" + match.UserName + ":" + match.Domain + ")"));
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Returning {((match == null) ? "null" : "(" + match.UserName + ":" + match.Domain + ")")}");
 
             return match;
         }
@@ -440,7 +418,7 @@ namespace System.Net
         }
     }
 
-    internal struct CredentialHostKey : IEquatable<CredentialHostKey>
+    internal readonly struct CredentialHostKey : IEquatable<CredentialHostKey>
     {
         public readonly string Host;
         public readonly string AuthenticationType;
@@ -469,10 +447,7 @@ namespace System.Net
                 string.Equals(Host, other.Host, StringComparison.OrdinalIgnoreCase) &&
                 Port == other.Port;
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialHostKey::Equals(" + ToString() + ", " + other.ToString() + ") returns " + equals.ToString());
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Equals({this},{other}) returns {equals}");
 
             return equals;
         }
@@ -481,7 +456,7 @@ namespace System.Net
             obj is CredentialHostKey && Equals((CredentialHostKey)obj);
 
         public override string ToString() =>
-            Host + ":" + Port.ToString(NumberFormatInfo.InvariantInfo) + ":" + LoggingHash.ObjectToString(AuthenticationType);
+            Host + ":" + Port.ToString(NumberFormatInfo.InvariantInfo) + ":" + AuthenticationType;
     }
 
     internal sealed class CredentialKey : IEquatable<CredentialKey>
@@ -513,10 +488,7 @@ namespace System.Net
                 return false;
             }
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialKey::Match(" + UriPrefix.ToString() + " & " + uri.ToString() + ")");
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Match({UriPrefix} & {uri})");
 
             return IsPrefix(uri, UriPrefix);
         }
@@ -567,16 +539,14 @@ namespace System.Net
                 string.Equals(AuthenticationType, other.AuthenticationType, StringComparison.OrdinalIgnoreCase) &&
                 UriPrefix.Equals(other.UriPrefix);
 
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print("CredentialKey::Equals(" + ToString() + ", " + other.ToString() + ") returns " + equals.ToString());
-            }
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"Equals({this},{other}) returns {equals}");
+
             return equals;
         }
 
         public override bool Equals(object obj) => Equals(obj as CredentialKey);
 
         public override string ToString() =>
-            "[" + UriPrefixLength.ToString(NumberFormatInfo.InvariantInfo) + "]:" + LoggingHash.ObjectToString(UriPrefix) + ":" + LoggingHash.ObjectToString(AuthenticationType);
+            "[" + UriPrefixLength.ToString(NumberFormatInfo.InvariantInfo) + "]:" + UriPrefix + ":" + AuthenticationType;
     }
 }

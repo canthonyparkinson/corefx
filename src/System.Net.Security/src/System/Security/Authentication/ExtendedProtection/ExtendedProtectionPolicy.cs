@@ -3,6 +3,8 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections;
+using System.Runtime.InteropServices;
+using System.Runtime.Serialization;
 using System.Text;
 
 namespace System.Security.Authentication.ExtendedProtection
@@ -11,7 +13,7 @@ namespace System.Security.Authentication.ExtendedProtection
     /// This class contains the necessary settings for specifying how Extended Protection 
     /// should behave. Use one of the Build* methods to create an instance of this type.
     /// </summary>
-    public class ExtendedProtectionPolicy
+    public class ExtendedProtectionPolicy : ISerializable
     {
         private const string policyEnforcementName = "policyEnforcement";
         private const string protectionScenarioName = "protectionScenario";
@@ -73,6 +75,16 @@ namespace System.Security.Authentication.ExtendedProtection
             // This is the only constructor which allows PolicyEnforcement.Never.
             _policyEnforcement = policyEnforcement;
             _protectionScenario = ProtectionScenario.TransportSelected;
+        }
+
+        protected ExtendedProtectionPolicy(SerializationInfo info, StreamingContext context)
+        {
+            throw new PlatformNotSupportedException();
+        }
+
+        void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            throw new PlatformNotSupportedException();
         }
 
         public ServiceNameCollection CustomServiceNames

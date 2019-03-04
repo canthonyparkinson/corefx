@@ -8,7 +8,7 @@ using Xunit;
 
 namespace System.Tests
 {
-    public static class IntPtrTests
+    public static partial class IntPtrTests
     {
         private static unsafe bool Is64Bit => sizeof(void*) == 8;
 
@@ -141,6 +141,7 @@ namespace System.Tests
             Assert.Throws<OverflowException>(() => (int)ptr);
         }
 
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "This was a bug fix in .NET Core where the hash code should be different")]
         [ConditionalFact(nameof(Is64Bit))]
         public static void GetHashCodeRespectAllBits()
         {
@@ -153,7 +154,7 @@ namespace System.Tests
         {
             Assert.Equal(expected, ptr.ToInt64());
 
-            int expected32 = (int)expected;
+            int expected32 = unchecked((int)expected);
             if (expected32 != expected)
             {
                 Assert.Throws<OverflowException>(() => ptr.ToInt32());
@@ -164,7 +165,7 @@ namespace System.Tests
             Assert.Equal(expected32, ptr.ToInt32());
 
             Assert.Equal(expected.ToString(), ptr.ToString());
-            Assert.Equal(expected.ToString("x"), ptr.ToString("x"));
+            Assert.Equal(IntPtr.Size == 4 ? expected32.ToString("x") : expected.ToString("x"), ptr.ToString("x"));
 
             Assert.Equal(ptr, new IntPtr(expected));
             Assert.True(ptr == new IntPtr(expected));

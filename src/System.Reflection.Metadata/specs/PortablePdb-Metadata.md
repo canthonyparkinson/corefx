@@ -1,4 +1,4 @@
-#Portable PDB v1.0: Format Specification
+# Portable PDB v1.0: Format Specification
 
 ## Portable PDB
 The Portable PDB (Program Database) format describes an encoding of debugging information produced by compilers of Common Language Infrastructure (CLI) languages and consumed by debuggers and other tools. The format is based on the ECMA-335 Partition II metadata standard. It extends its schema while using the same physical table and stream layouts and encodings. The schema of the debugging metadata is complementary to the ECMA-335 metadata schema, therefore, the debugging metadata can (but doesn’t need to) be stored in the same metadata section of the PE/COFF file as the type system metadata.
@@ -22,6 +22,8 @@ The ECMA-335-II standard is amended by an addition of the following tables to th
     * [DefaultNamespace](#DefaultNamespace)
     * [EditAndContinueLocalSlotMap](#EditAndContinueLocalSlotMap)
     * [EditAndContinueLambdaAndClosureMap](#EditAndContinueLambdaAndClosureMap)
+    * [EmbeddedSource](#EmbeddedSource)
+    * [SourceLink](#SourceLink)
 
 Debugging metadata tables may be embedded into type system metadata (and part of a PE file), or they may be stored separately in a metadata blob contained in a .pdb file. In the latter case additional information is included that connects the debugging metadata to the type system metadata.
 
@@ -131,7 +133,7 @@ _Sequence points blob_ has the following structure:
     Blob ::= header SequencePointRecord (SequencePointRecord | document-record)*
     SequencePointRecord ::= sequence-point-record | hidden-sequence-point-record
 
-#####header
+##### header
 | component        | value stored                  | integer representation |
 |:-----------------|:------------------------------|:-----------------------|
 | _LocalSignature_ | StandAloneSig table row id    | unsigned compressed    |
@@ -141,7 +143,7 @@ _LocalSignature_ stores the row id of the local signature of the method. This in
 
 _InitialDocument_ is only present if the _Document_ field of the _MethodDebugInformation_ table is nil (i.e. the method body spans multiple documents).
 
-#####sequence-point-record
+##### sequence-point-record
 | component      | value stored                                         | integer representation                      |
 |:---------------|:-----------------------------------------------------|:--------------------------------------------|
 | _δILOffset_    | _ILOffset_ if this is the first sequence point       | unsigned compressed                         |
@@ -154,7 +156,7 @@ _InitialDocument_ is only present if the _Document_ field of the _MethodDebugInf
 | _δStartColumn_ | _StartColumn_ if this is the first non-hidden sequence point | unsigned compressed |
 |                | _StartColumn_ - _PreviousNonHidden_._StartColumn_ otherwise  | signed compressed   |
 
-#####hidden-sequence-point-record
+##### hidden-sequence-point-record
 | component    | value stored                                           | integer representation          |
 |:-------------|:-------------------------------------------------------|:--------------------------------|
 | _δILOffset_  | _ILOffset_ if this is the first sequence point         | unsigned compressed             |
@@ -162,7 +164,7 @@ _InitialDocument_ is only present if the _Document_ field of the _MethodDebugInf
 | _ΔLine_      | 0                                                      | unsigned compressed             |
 | _ΔColumn_	   | 0                                                      | unsigned compressed             |
 
-#####document-record
+##### document-record
 | component    | value stored                       | integer representation         |
 |:-------------|:-----------------------------------|:-------------------------------|
 | _δILOffset_  | 0                                  | unsigned compressed            |
@@ -230,12 +232,12 @@ There shall be no duplicate rows in the LocalVariable table, based upon owner an
 
 There shall be no duplicate rows in the LocalVariable table, based upon owner and _Name_.
 
-#####<a name="LocalVariableAttributes"></a>LocalVariableAttributes
+##### <a name="LocalVariableAttributes"></a>LocalVariableAttributes
 | flag  | value | description |
 |:------|:------|:------------|
 | DebuggerHidden | 0x0001 | Variable shouldn’t appear in the list of variables displayed by the debugger |
 
-###<a name="LocalConstantTable"></a>LocalConstant Table: 0x34
+### <a name="LocalConstantTable"></a>LocalConstant Table: 0x34
 
 The LocalConstant table has the following columns:
 
@@ -246,7 +248,7 @@ Conceptually, every row in the LocalConstant table is owned by one, and only one
 
 There shall be no duplicate rows in the LocalConstant table, based upon owner and _Name_.
 
-####<a name="LocalConstantSig"></a>LocalConstantSig Blob
+#### <a name="LocalConstantSig"></a>LocalConstantSig Blob
 
 The structure of the blob is
 
@@ -300,13 +302,13 @@ The encoding of the _GeneralValue_ is determined based upon the type expressed b
 | System        | Decimal  | sign (highest bit), scale (bits 0..7), low (uint32), mid (uint32), high (uint32) |
 | System        | DateTime | int64: ticks             | 
 
-###<a name="ImportScopeTable"></a>ImportScope Table: 0x35
+### <a name="ImportScopeTable"></a>ImportScope Table: 0x35
 The ImportScope table has the following columns:
 
 * Parent (ImportScope row id or nil)
 * Imports (Blob index, encoding: [Imports blob](#ImportsBlob))
 
-####<a name="ImportsBlob"></a>Imports Blob
+#### <a name="ImportsBlob"></a>Imports Blob
 Imports blob represents all imports declared by an import scope.
 
 Imports blob has the following structure:
@@ -422,7 +424,7 @@ _start-offset_ shall point to the starting byte of an instruction of the MoveNex
 _start-offset_ + _length_ shall point to the starting byte of an instruction or be equal to the size of the IL stream of the MoveNext method of the state machine type.
 
 ##### <a name="DynamicLocalVariables"></a>Dynamic Local Variables (C# compiler)
-Parent: LocalVariables or LocalConstant
+Parent: LocalVariable or LocalConstant
 
 Kind: {83C563C4-B4F3-47D5-B824-BA5441477EA8}
 
@@ -430,7 +432,7 @@ Structure:
 
     Blob ::= bit-sequence
 
-A sequence of bits for a local variable or constant whose type contains _dynamic_ type (e.g. dynamic, dynamic[], List<dynamic> etc.) that describes which System.Object types encoded in the metadata signature of the local type were specified as _dynamic_ in source code.
+A sequence of bits for a local variable or constant whose type contains _dynamic_ type (e.g. ```dynamic```, ```dynamic[]```, ```List<dynamic>``` etc.) that describes which System.Object types encoded in the metadata signature of the local type were specified as _dynamic_ in source code.
 
 Bits of the sequence are grouped by 8. If the sequence length is not a multiple of 8 it is padded by 0 bit to the closest multiple of 8. Each group of 8 bits is encoded as a byte whose least significant bit is the first bit of the group and the highest significant bit is the 8th bit of the group. The sequence is encoded as a sequence of bytes representing these groups. Trailing zero bytes may be omitted.
 
@@ -499,5 +501,25 @@ The number of lambda entries is determined by the size of the blob (the reader s
 
 The exact algorithm used to calculate syntax offsets and the algorithm that maps lambdas/closures to their implementing methods, types and syntax nodes is language and implementation specific and may change in future versions of the compiler.
 
+##### <a name="EmbeddedSource"></a>Embedded Source (C# and VB compilers)
+Parent: Document
 
+Kind: {0E8A571B-6926-466E-B4AD-8AB04611F5FE}
 
+Embeds the content of the corresponding document in the PDB.
+
+The blob has the following structure:
+
+    Blob ::= format content
+
+| terminal  | encoding         | description  |
+|:----------|:-----------------|:-------------|
+| _format_  | int32            | Indicates how the content is serialized. 0 = raw bytes, uncompressed. Positive value = compressed by deflate algorithm and value indicates uncompressed size. Negative values reserved for future formats. |
+| _content_ | format-specific  | The text of the document in the specified format. The length is implied by the length of the blob minus four bytes for the format. |
+
+##### <a name="SourceLink"></a>Source Link (C# and VB compilers)
+Parent: Module
+
+Kind: {CC110556-A091-4D38-9FEC-25AB9A351A6A}
+
+The blob stores UTF8 encoded text file in JSON format that includes information on how to locate the content of documents listed in Document table on a source server.

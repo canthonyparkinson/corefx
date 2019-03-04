@@ -5,6 +5,7 @@
 using System.ComponentModel;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Runtime.Serialization;
 
 namespace System.Net.NetworkInformation
 {
@@ -13,6 +14,8 @@ namespace System.Net.NetworkInformation
     ///       Provides NetworkInformation exceptions to the application.
     ///    </para>
     /// </devdoc>
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class NetworkInformationException : Win32Exception
     {
         /// <devdoc>
@@ -33,6 +36,10 @@ namespace System.Net.NetworkInformation
         {
         }
 
+        protected NetworkInformationException(SerializationInfo serializationInfo, StreamingContext streamingContext) : base(serializationInfo, streamingContext)
+        {
+        }
+
         internal NetworkInformationException(SocketError socketError) : base((int)socketError)
         {
         }
@@ -41,10 +48,14 @@ namespace System.Net.NetworkInformation
         {
         }
 
+        internal NetworkInformationException(string message, Exception innerException) : base(message, innerException)
+        {
+        }
+
         /// <devdoc>
         ///    <para>[To be supplied.]</para>
         /// </devdoc>
-        public int ErrorCode
+        public override int ErrorCode
         {
             // The base class returns the HResult with this property.
             // We need the Win32 error code, hence the override.

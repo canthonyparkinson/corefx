@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics;
 using System.Threading;
 
 namespace System.IO.Pipes
@@ -15,11 +14,9 @@ namespace System.IO.Pipes
         private bool _isMessageComplete;
         private int _numBytes; // number of buffer read OR written
 
-        internal ReadWriteCompletionSource(PipeStream stream, byte[] buffer, CancellationToken cancellationToken, bool isWrite)
-            : base(stream._threadPoolBinding, cancellationToken, pinData: buffer)
+        internal ReadWriteCompletionSource(PipeStream stream, ReadOnlyMemory<byte> bufferToPin, bool isWrite)
+            : base(stream._threadPoolBinding, bufferToPin)
         {
-            Debug.Assert(buffer != null, "buffer is null");
-
             _pipeStream = stream;
             _isWrite = isWrite;
             _isMessageComplete = true;
@@ -44,16 +41,16 @@ namespace System.IO.Pipes
             {
                 switch (errorCode)
                 {
-                    case Interop.mincore.Errors.ERROR_BROKEN_PIPE:
-                    case Interop.mincore.Errors.ERROR_PIPE_NOT_CONNECTED:
-                    case Interop.mincore.Errors.ERROR_NO_DATA:
+                    case Interop.Errors.ERROR_BROKEN_PIPE:
+                    case Interop.Errors.ERROR_PIPE_NOT_CONNECTED:
+                    case Interop.Errors.ERROR_NO_DATA:
                         errorCode = 0;
                         break;
                 }
             }
 
             // For message type buffer.
-            if (errorCode == Interop.mincore.Errors.ERROR_MORE_DATA)
+            if (errorCode == Interop.Errors.ERROR_MORE_DATA)
             {
                 errorCode = 0;
                 _isMessageComplete = false;

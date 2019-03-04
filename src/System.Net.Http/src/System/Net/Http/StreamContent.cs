@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Diagnostics;
-using System.Diagnostics.Contracts;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,16 +11,20 @@ namespace System.Net.Http
 {
     public class StreamContent : HttpContent
     {
-        private const int defaultBufferSize = 4096;
-
         private Stream _content;
         private int _bufferSize;
         private bool _contentConsumed;
         private long _start;
 
         public StreamContent(Stream content)
-            : this(content, defaultBufferSize)
         {
+            if (content == null)
+            {
+                throw new ArgumentNullException(nameof(content));
+            }
+
+            // Indicate that we should use default buffer size by setting size to 0.
+            InitializeContent(content, 0);
         }
 
         public StreamContent(Stream content, int bufferSize)
@@ -35,13 +38,18 @@ namespace System.Net.Http
                 throw new ArgumentOutOfRangeException(nameof(bufferSize));
             }
 
+            InitializeContent(content, bufferSize);
+        }
+
+        private void InitializeContent(Stream content, int bufferSize)
+        {
             _content = content;
             _bufferSize = bufferSize;
             if (content.CanSeek)
             {
                 _start = content.Position;
             }
-            if (HttpEventSource.Log.IsEnabled()) HttpEventSource.Associate(this, content);
+            if (NetEventSource.IsEnabled) NetEventSource.Associate(this, content);
         }
 
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext context)
@@ -82,6 +90,10 @@ namespace System.Net.Http
             return Task.FromResult<Stream>(new ReadOnlyStream(_content));
         }
 
+        internal override Stream TryCreateContentReadStream() =>
+            GetType() == typeof(StreamContent) ? new ReadOnlyStream(_content) : // type check ensures we use possible derived type's CreateContentReadStreamAsync override
+            null;
+
         private void PrepareContent()
         {
             if (_contentConsumed)
@@ -102,7 +114,7 @@ namespace System.Net.Http
             _contentConsumed = true;
         }
 
-        private class ReadOnlyStream : DelegatingStream
+        private sealed class ReadOnlyStream : DelegatingStream
         {
             public override bool CanWrite
             {
@@ -140,12 +152,22 @@ namespace System.Net.Http
                 throw new NotSupportedException(SR.net_http_content_readonly_stream);
             }
 
+            public override void Write(ReadOnlySpan<byte> buffer)
+            {
+                throw new NotSupportedException(SR.net_http_content_readonly_stream);
+            }
+
             public override void WriteByte(byte value)
             {
                 throw new NotSupportedException(SR.net_http_content_readonly_stream);
             }
 
             public override Task WriteAsync(byte[] buffer, int offset, int count, Threading.CancellationToken cancellationToken)
+            {
+                throw new NotSupportedException(SR.net_http_content_readonly_stream);
+            }
+
+            public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
             {
                 throw new NotSupportedException(SR.net_http_content_readonly_stream);
             }

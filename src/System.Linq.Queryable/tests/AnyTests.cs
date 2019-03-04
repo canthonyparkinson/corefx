@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Linq.Expressions;
 using Xunit;
 
@@ -38,20 +37,20 @@ namespace System.Linq.Tests
         [Fact]
         public void NullSource()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IQueryable<int>)null).Any());
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IQueryable<int>)null).Any());
         }
 
         [Fact]
         public void NullSourcePredicateUsed()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IQueryable<int>)null).Any(i => i != 0));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IQueryable<int>)null).Any(i => i != 0));
         }
 
         [Fact]
         public void NullPredicateUsed()
         {
             Expression<Func<int, bool>> predicate = null;
-            Assert.Throws<ArgumentNullException>("predicate", () => Enumerable.Range(0, 3).AsQueryable().Any(predicate));
+            AssertExtensions.Throws<ArgumentNullException>("predicate", () => Enumerable.Range(0, 3).AsQueryable().Any(predicate));
         }
 
         [Fact]

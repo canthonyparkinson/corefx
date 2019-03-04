@@ -4,7 +4,6 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 
 namespace System.Collections.Immutable
@@ -128,6 +127,8 @@ namespace System.Collections.Immutable
                 }
             }
 
+            private static void ThrowIndexOutOfRangeException() => throw new IndexOutOfRangeException();
+
             /// <summary>
             /// Gets or sets the element at the specified index.
             /// </summary>
@@ -141,7 +142,7 @@ namespace System.Collections.Immutable
                 {
                     if (index >= this.Count)
                     {
-                        throw new IndexOutOfRangeException();
+                        ThrowIndexOutOfRangeException();
                     }
 
                     return _elements[index];
@@ -151,12 +152,31 @@ namespace System.Collections.Immutable
                 {
                     if (index >= this.Count)
                     {
-                        throw new IndexOutOfRangeException();
+                        ThrowIndexOutOfRangeException();
                     }
 
                     _elements[index] = value;
                 }
             }
+
+#if FEATURE_ITEMREFAPI
+            /// <summary>
+            /// Gets a read-only reference to the element at the specified index.
+            /// </summary>
+            /// <param name="index">The index.</param>
+            /// <returns></returns>
+            /// <exception cref="IndexOutOfRangeException">
+            /// </exception>
+            public ref readonly T ItemRef(int index)
+            {
+                if (index >= this.Count)
+                {
+                    ThrowIndexOutOfRangeException();
+                }
+
+                return ref this._elements[index];
+            }
+#endif
 
             /// <summary>
             /// Gets a value indicating whether the <see cref="ICollection{T}"/> is read-only.
@@ -174,11 +194,6 @@ namespace System.Collections.Immutable
             /// <returns>An immutable array.</returns>
             public ImmutableArray<T> ToImmutable()
             {
-                if (Count == 0)
-                {
-                    return Empty;
-                }
-
                 return new ImmutableArray<T>(this.ToArray());
             }
 
@@ -234,8 +249,10 @@ namespace System.Collections.Immutable
             /// <param name="item">The object to add to the <see cref="ICollection{T}"/>.</param>
             public void Add(T item)
             {
-                this.EnsureCapacity(this.Count + 1);
-                _elements[_count++] = item;
+                int newCount = _count + 1;
+                this.EnsureCapacity(newCount);
+                _elements[_count] = item;
+                _count = newCount;
             }
 
             /// <summary>
@@ -250,6 +267,12 @@ namespace System.Collections.Immutable
                 if (items.TryGetCount(out count))
                 {
                     this.EnsureCapacity(this.Count + count);
+
+                    if (items.TryCopyTo(_elements, _count))
+                    {
+                        _count += count;
+                        return;
+                    }
                 }
 
                 foreach (var item in items)
@@ -408,6 +431,11 @@ namespace System.Collections.Immutable
             /// </summary>
             public T[] ToArray()
             {
+                if (this.Count == 0)
+                {
+                    return Empty.array;
+                }
+
                 T[] result = new T[this.Count];
                 Array.Copy(_elements, 0, result, 0, this.Count);
                 return result;
@@ -651,7 +679,11 @@ namespace System.Collections.Immutable
 
                 if (Count > 1)
                 {
-                    Array.Sort(_elements, comparison);
+                    // Array.Sort does not have an overload that takes both bounds and a Comparison.
+                    // We could special case _count == _elements.Length in order to try to avoid
+                    // the IComparer allocation, but the Array.Sort overload that takes a Comparison
+                    // allocates such an IComparer internally, anyway.
+                    Array.Sort(_elements, 0, _count, Comparer<T>.Create(comparison));
                 }
             }
 
@@ -734,37 +766,6 @@ namespace System.Collections.Immutable
                 {
                     nodes[offset + i] = items[i];
                 }
-            }
-        }
-    }
-
-    /// <summary>
-    /// A simple view of the immutable collection that the debugger can show to the developer.
-    /// </summary>
-    internal sealed class ImmutableArrayBuilderDebuggerProxy<T>
-    {
-        /// <summary>
-        /// The collection to be enumerated.
-        /// </summary>
-        private readonly ImmutableArray<T>.Builder _builder;
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ImmutableArrayBuilderDebuggerProxy{T}"/> class.
-        /// </summary>
-        /// <param name="builder">The collection to display in the debugger</param>
-        public ImmutableArrayBuilderDebuggerProxy(ImmutableArray<T>.Builder builder)
-        {
-            _builder = builder;
-        }
-
-        /// <summary>
-        /// Gets a simple debugger-viewable collection.
-        /// </summary>
-        [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
-        public T[] A
-        {
-            get
-            {
-                return _builder.ToArray();
             }
         }
     }

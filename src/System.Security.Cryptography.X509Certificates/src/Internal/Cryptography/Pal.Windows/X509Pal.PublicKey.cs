@@ -2,23 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.IO;
-using System.Text;
-using System.Diagnostics;
-using System.Globalization;
-using System.Runtime.InteropServices;
-
-using Internal.Cryptography;
 using Internal.Cryptography.Pal.Native;
-
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-
-using SafeBCryptKeyHandle = Microsoft.Win32.SafeHandles.SafeBCryptKeyHandle;
-using SafeNCryptKeyHandle = Microsoft.Win32.SafeHandles.SafeNCryptKeyHandle;
 
 using NTSTATUS = Interop.BCrypt.NTSTATUS;
+using SafeBCryptKeyHandle = Microsoft.Win32.SafeHandles.SafeBCryptKeyHandle;
 
 using static Interop.Crypt32;
 
@@ -30,9 +22,12 @@ namespace Internal.Cryptography.Pal
     /// </summary>
     internal sealed partial class X509Pal : IX509Pal
     {
+        const string BCRYPT_ECC_CURVE_NAME_PROPERTY = "ECCCurveName";
+        const string BCRYPT_ECC_PARAMETERS_PROPERTY = "ECCParameters";
+
         public AsymmetricAlgorithm DecodePublicKey(Oid oid, byte[] encodedKeyValue, byte[] encodedParameters, ICertificatePal certificatePal)
         {
-            if (oid.Value == Oids.Ecc)
+            if (oid.Value == Oids.EcPublicKey && certificatePal != null)
             {
                 return DecodeECDsaPublicKey((CertificatePal)certificatePal);
             }
@@ -47,8 +42,6 @@ namespace Internal.Cryptography.Pal
                         CngKey cngKey = CngKey.Import(keyBlob, CngKeyBlobFormat.GenericPublicBlob);
                         return new RSACng(cngKey);
                     }
-
-#if !NETNATIVE
                 case AlgId.CALG_DSS_SIGN:
                     {
                         byte[] keyBlob = ConstructDSSPublicKeyCspBlob(encodedKeyValue, encodedParameters);
@@ -56,8 +49,6 @@ namespace Internal.Cryptography.Pal
                         dsa.ImportCspBlob(keyBlob);
                         return dsa;
                     }
-#endif
-
                 default:
                     throw new NotSupportedException(SR.NotSupported_KeyAlgorithm);
             }
@@ -65,23 +56,47 @@ namespace Internal.Cryptography.Pal
 
         private static ECDsa DecodeECDsaPublicKey(CertificatePal certificatePal)
         {
+            ECDsa ecdsa;
             using (SafeBCryptKeyHandle bCryptKeyHandle = ImportPublicKeyInfo(certificatePal.CertContext))
             {
-                CngKeyBlobFormat blobFormat = CngKeyBlobFormat.EccPublicBlob;
-                byte[] keyBlob = ExportKeyBlob(bCryptKeyHandle, blobFormat);
-                using (CngKey cngKey = CngKey.Import(keyBlob, blobFormat))
+                CngKeyBlobFormat blobFormat;
+                byte[] keyBlob;
+                string curveName = GetCurveName(bCryptKeyHandle);
+
+                if (curveName == null)
                 {
-                    return new ECDsaCng(cngKey);
+                    if (HasExplicitParameters(bCryptKeyHandle))
+                    {
+                        blobFormat = CngKeyBlobFormat.EccFullPublicBlob;
+                    }
+                    else
+                    {
+                        blobFormat = CngKeyBlobFormat.EccPublicBlob;
+                    }
+
+                    keyBlob = ExportKeyBlob(bCryptKeyHandle, blobFormat);
+                    using (CngKey cngKey = CngKey.Import(keyBlob, blobFormat))
+                    {
+                        ecdsa = new ECDsaCng(cngKey);
+                    }
+                }
+                else
+                {
+                    blobFormat = CngKeyBlobFormat.EccPublicBlob;
+                    keyBlob = ExportKeyBlob(bCryptKeyHandle, blobFormat);
+                    ECParameters ecparams = new ECParameters();
+                    ExportNamedCurveParameters(ref ecparams, keyBlob, false);
+                    ecparams.Curve = ECCurve.CreateFromFriendlyName(curveName);
+                    ecdsa = new ECDsaCng();
+                    ecdsa.ImportParameters(ecparams);
                 }
             }
+
+            return ecdsa;
         }
 
         private static SafeBCryptKeyHandle ImportPublicKeyInfo(SafeCertContextHandle certContext)
         {
-#if NETNATIVE
-            // CryptImportPublicKeyInfoEx2() not in the UWP api list.
-            throw new PlatformNotSupportedException();
-#else
             unsafe
             {
                 SafeBCryptKeyHandle bCryptKeyHandle;
@@ -103,30 +118,57 @@ namespace Internal.Cryptography.Pal
                         certContext.DangerousRelease();
                 }
             }
-#endif //NETNATIVE
         }
 
         private static byte[] ExportKeyBlob(SafeBCryptKeyHandle bCryptKeyHandle, CngKeyBlobFormat blobFormat)
         {
-#if NETNATIVE
-            // BCryptExportKey() not in the UWP api list.
-            throw new PlatformNotSupportedException();
-#else
             string blobFormatString = blobFormat.Format;
 
             int numBytesNeeded = 0;
             NTSTATUS ntStatus = Interop.BCrypt.BCryptExportKey(bCryptKeyHandle, IntPtr.Zero, blobFormatString, null, 0, out numBytesNeeded, 0);
             if (ntStatus != NTSTATUS.STATUS_SUCCESS)
-                throw new CryptographicException(Interop.mincore.GetMessage((int)ntStatus));
+                throw new CryptographicException(Interop.Kernel32.GetMessage((int)ntStatus));
 
             byte[] keyBlob = new byte[numBytesNeeded];
             ntStatus = Interop.BCrypt.BCryptExportKey(bCryptKeyHandle, IntPtr.Zero, blobFormatString, keyBlob, keyBlob.Length, out numBytesNeeded, 0);
             if (ntStatus != NTSTATUS.STATUS_SUCCESS)
-                throw new CryptographicException(Interop.mincore.GetMessage((int)ntStatus));
+                throw new CryptographicException(Interop.Kernel32.GetMessage((int)ntStatus));
 
             Array.Resize(ref keyBlob, numBytesNeeded);
             return keyBlob;
-#endif //NETNATIVE
+        }
+        
+        private static void ExportNamedCurveParameters(ref ECParameters ecParams, byte[] ecBlob, bool includePrivateParameters)
+        {
+            // We now have a buffer laid out as follows:
+            //     BCRYPT_ECCKEY_BLOB   header
+            //     byte[cbKey]          Q.X
+            //     byte[cbKey]          Q.Y
+            //     -- Private only --
+            //     byte[cbKey]          D
+
+            unsafe
+            {
+                Debug.Assert(ecBlob.Length >= sizeof(Interop.BCrypt.BCRYPT_ECCKEY_BLOB));
+
+                fixed (byte* pEcBlob = &ecBlob[0])
+                {
+                    Interop.BCrypt.BCRYPT_ECCKEY_BLOB* pBcryptBlob = (Interop.BCrypt.BCRYPT_ECCKEY_BLOB*)pEcBlob;
+
+                    int offset = sizeof(Interop.BCrypt.BCRYPT_ECCKEY_BLOB);
+
+                    ecParams.Q = new ECPoint
+                    {
+                        X = Interop.BCrypt.Consume(ecBlob, ref offset, pBcryptBlob->cbKey),
+                        Y = Interop.BCrypt.Consume(ecBlob, ref offset, pBcryptBlob->cbKey)
+                    };
+
+                    if (includePrivateParameters)
+                    {
+                        ecParams.D = Interop.BCrypt.Consume(ecBlob, ref offset, pBcryptBlob->cbKey);
+                    }
+                }
+            }
         }
 
         private static byte[] DecodeKeyBlob(CryptDecodeObjectStructType lpszStructType, byte[] encodedKeyValue)
@@ -218,8 +260,9 @@ namespace Internal.Cryptography.Pal
 
                 encodedKeyValue.DecodeObject(
                     CryptDecodeObjectStructType.X509_DSS_PUBLICKEY,
-                    delegate (void* pvDecoded)
+                    delegate (void* pvDecoded, int cbDecoded)
                     {
+                        Debug.Assert(cbDecoded >= sizeof(CRYPTOAPI_BLOB));
                         CRYPTOAPI_BLOB* pBlob = (CRYPTOAPI_BLOB*)pvDecoded;
                         decodedKeyValue = pBlob->ToByteArray();
                     }
@@ -239,8 +282,9 @@ namespace Internal.Cryptography.Pal
             {
                 encodedParameters.DecodeObject(
                     CryptDecodeObjectStructType.X509_DSS_PARAMETERS,
-                    delegate (void* pvDecoded)
+                    delegate (void* pvDecoded, int cbDecoded)
                     {
+                        Debug.Assert(cbDecoded >= sizeof(CERT_DSS_PARAMETERS));
                         CERT_DSS_PARAMETERS* pCertDssParameters = (CERT_DSS_PARAMETERS*)pvDecoded;
                         pLocal = pCertDssParameters->p.ToByteArray();
                         qLocal = pCertDssParameters->q.ToByteArray();
@@ -252,6 +296,57 @@ namespace Internal.Cryptography.Pal
             p = pLocal;
             q = qLocal;
             g = gLocal;
+        }
+
+        private static bool HasExplicitParameters(SafeBCryptKeyHandle bcryptHandle)
+        {
+            byte[] explicitParams = GetProperty(bcryptHandle, BCRYPT_ECC_PARAMETERS_PROPERTY);
+            return (explicitParams != null && explicitParams.Length > 0);
+        }
+
+        private static string GetCurveName(SafeBCryptKeyHandle bcryptHandle)
+        {
+            return GetPropertyAsString(bcryptHandle, BCRYPT_ECC_CURVE_NAME_PROPERTY);
+        }
+
+        private static string GetPropertyAsString(SafeBCryptKeyHandle cryptHandle, string propertyName)
+        {
+            Debug.Assert(!cryptHandle.IsInvalid);
+            byte[] value = GetProperty(cryptHandle, propertyName);
+            if (value == null || value.Length == 0)
+                return null;
+
+            unsafe
+            {
+                fixed (byte* pValue = &value[0])
+                {
+                    string valueAsString = Marshal.PtrToStringUni((IntPtr)pValue);
+                    return valueAsString;
+                }
+            }
+        }
+
+        private static byte[] GetProperty(SafeBCryptKeyHandle cryptHandle, string propertyName)
+        {
+            Debug.Assert(!cryptHandle.IsInvalid);
+            unsafe
+            {
+                int numBytesNeeded;
+                NTSTATUS errorCode = Interop.BCrypt.BCryptGetProperty(cryptHandle, propertyName, null, 0, out numBytesNeeded, 0);
+                if (errorCode != NTSTATUS.STATUS_SUCCESS)
+                    return null;
+
+                byte[] propertyValue = new byte[numBytesNeeded];
+                fixed (byte* pPropertyValue = propertyValue)
+                {
+                    errorCode = Interop.BCrypt.BCryptGetProperty(cryptHandle, propertyName, pPropertyValue, propertyValue.Length, out numBytesNeeded, 0);
+                }
+                if (errorCode != NTSTATUS.STATUS_SUCCESS)
+                    return null;
+
+                Array.Resize(ref propertyValue, numBytesNeeded);
+                return propertyValue;
+            }
         }
     }
 }

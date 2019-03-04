@@ -4,8 +4,8 @@
 
 using System;
 using System.Diagnostics;
-using System.Security.Cryptography;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 internal static partial class Interop
 {
@@ -97,7 +97,7 @@ internal static partial class Interop
                     IntPtr allGroupOidInfo = CryptFindOIDInfo(keyType, rawKey, OidGroup.All);
                     if (allGroupOidInfo != IntPtr.Zero)
                     {
-                        return Marshal.PtrToStructure<CRYPT_OID_INFO>(fullOidInfo);
+                        return Marshal.PtrToStructure<CRYPT_OID_INFO>(allGroupOidInfo);
                     }
                 }
 
